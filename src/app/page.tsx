@@ -4,6 +4,16 @@ import { useState, useMemo } from 'react';
 import { INITIAL_GAMES } from '@/data/mockGames';
 import { GameCard } from '@/components/games/GameCard';
 import { FilterSortSheet } from '@/components/games/FilterSortSheet';
+import {
+  SunIcon,
+  GridIcon,
+  ListIcon,
+  SearchIcon,
+  SlidersIcon,
+  BookIcon,
+  HeartIcon,
+  PlusCircleIcon,
+} from '@/components/ui/Icons';
 
 export default function CollectionPage() {
   const [games] = useState(INITIAL_GAMES);
@@ -88,24 +98,18 @@ export default function CollectionPage() {
             {ownedCount} games owned
           </p>
           <div className="flex items-center justify-between mt-1">
-            <h1 className="text-3xl font-black tracking-tight text-white">
-              Collection
-            </h1>
+            <h1 className="font-display text-4xl font-black tracking-tight text-white">Collection</h1>
 
             {/* Header Right Icon Buttons */}
             <div className="flex items-center gap-2.5">
-              <button
-                className="w-10 h-10 rounded-2xl bg-[#141b34] border border-[#202a4e] flex items-center justify-center text-[#9bb2d4] active:scale-95 transition-transform"
-                title="Theme"
-              >
-                ☼
+              <button className="w-10 h-10 rounded-2xl bg-[#141b34] border border-[#202a4e] flex items-center justify-center text-[#9bb2d4] active:scale-95 transition-transform">
+                <SunIcon size={18} />
               </button>
               <button
                 onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                className="w-10 h-10 rounded-2xl bg-[#141b34] border border-[#202a4e] flex items-center justify-center text-[#9bb2d4] active:scale-95 transition-transform text-sm"
-                title="Toggle View Mode"
+                className="w-10 h-10 rounded-2xl bg-[#141b34] border border-[#202a4e] flex items-center justify-center text-[#9bb2d4] active:scale-95 transition-transform"
               >
-                {viewMode === 'grid' ? '☵' : '⊞'}
+                {viewMode === 'grid' ? <ListIcon size={18} /> : <GridIcon size={18} />}
               </button>
             </div>
           </div>
@@ -113,7 +117,7 @@ export default function CollectionPage() {
           {/* Search + Filter Row */}
           <div className="flex items-center gap-2.5 mt-4">
             <div className="flex-1 relative flex items-center h-12 bg-[#141a31] border border-[#202a4e] rounded-2xl px-3.5">
-              <span className="text-[#62779c] mr-2.5 text-sm">🔍</span>
+              <SearchIcon size={16} className="text-[#62779c] mr-2.5 shrink-0" />
               <input
                 type="text"
                 placeholder="Title, mechanic, theme"
@@ -134,9 +138,9 @@ export default function CollectionPage() {
             {/* Filter Sheet Trigger */}
             <button
               onClick={() => setIsFilterOpen(true)}
-              className="w-12 h-12 rounded-2xl bg-[#141b34] border border-[#202a4e] flex items-center justify-center text-[#9bb2d4] active:scale-95 transition-transform"
+              className="w-12 h-12 rounded-2xl bg-[#141b34] border border-[#202a4e] flex items-center justify-center text-[#9bb2d4] active:scale-95 transition-transform shrink-0"
             >
-              ⚙
+              <SlidersIcon size={18} />
             </button>
           </div>
         </header>
@@ -173,7 +177,7 @@ export default function CollectionPage() {
                   : 'text-[#8ba2c4] hover:text-white'
               }`}
             >
-              <span>📖</span>
+              <BookIcon size={16} />
               <span>Collection</span>
             </button>
 
@@ -185,7 +189,7 @@ export default function CollectionPage() {
                   : 'text-[#8ba2c4] hover:text-white'
               }`}
             >
-              <span>♡</span>
+              <HeartIcon size={16} />
               <span>Wanted</span>
             </button>
 
@@ -197,7 +201,7 @@ export default function CollectionPage() {
                   : 'text-[#8ba2c4] hover:text-white'
               }`}
             >
-              <span>⊕</span>
+              <PlusCircleIcon size={16} />
               <span>Add</span>
             </button>
           </div>
