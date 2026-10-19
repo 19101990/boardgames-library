@@ -28,7 +28,7 @@ export function FilterSortSheet({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70">
       {/* Tap backdrop to close */}
       <div className="absolute inset-0" onClick={onClose} />
 

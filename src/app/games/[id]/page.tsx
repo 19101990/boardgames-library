@@ -2,14 +2,37 @@
 
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { INITIAL_GAMES } from '@/data/mockGames';
 import Link from 'next/link';
+import { INITIAL_GAMES } from '@/data/mockGames';
+import {
+  UsersIcon,
+  ClockIcon,
+  CalendarIcon,
+  DumbbellIcon,
+  ArrowLeftIcon,
+  DiceIcon,
+  ChevronDownIcon,
+  RefreshIcon,
+  PlusIcon,
+  MinusIcon,
+  BookIcon,
+  HeartIcon,
+  PlusCircleIcon,
+} from '@/components/ui/Icons';
 
 export default function GameDetailPage() {
-  const { id } = useParams();
+  const params = useParams();
   const router = useRouter();
 
-  const game = INITIAL_GAMES.find((g) => g.id === id) || INITIAL_GAMES[0];
+  const rawId = Array.isArray(params?.id) ? params.id[0] : params?.id;
+  const game =
+    INITIAL_GAMES.find(
+      (g) =>
+        g.id === rawId ||
+        g.id === rawId?.replace(/^game-/, '') ||
+        String(g.bgg_id) === rawId
+    ) || INITIAL_GAMES[0];
+
   const initial = game.title.charAt(0).toUpperCase();
 
   const [isLoggingPlay, setIsLoggingPlay] = useState(false);
@@ -24,30 +47,38 @@ export default function GameDetailPage() {
     setPlayNotes('');
   };
 
+  const getWeightLabel = (w?: number) => {
+    if (!w) return 'Light';
+    if (w < 2.0) return 'Light';
+    if (w < 3.0) return 'Medium Light';
+    if (w < 3.8) return 'Medium Heavy';
+    return 'Heavy';
+  };
+
   return (
     <div className="min-h-screen bg-[#070913] text-white">
       <div className="max-w-md mx-auto min-h-screen flex flex-col pb-28 relative">
         
         {/* Top Hero Poster */}
         <div className="relative aspect-[16/10] w-full bg-[#143b47] flex items-center justify-center overflow-hidden">
-          <span className="text-9xl font-black text-[#326978]/60 select-none">
+          <span className="font-display text-9xl font-bold text-[#38e1ff]/40 select-none">
             {initial}
           </span>
 
           {/* Back Button */}
           <button
             onClick={() => router.back()}
-            className="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/60 border border-white/10 flex items-center justify-center text-white text-base active:scale-95"
+            className="absolute top-4 left-4 w-10 h-10 rounded-full bg-black/60 border border-white/10 flex items-center justify-center text-white active:scale-95 transition-transform"
           >
-            ←
+            <ArrowLeftIcon size={18} />
           </button>
 
           {/* BGG Rating Block */}
-          <div className="absolute top-4 right-4 bg-[#ff336d] text-white px-3 py-1 rounded-xl flex flex-col items-center shadow-lg">
-            <span className="text-lg font-black leading-none">
-              {game.bgg_rating ? game.bgg_rating.toFixed(1) : '—'}
+          <div className="absolute top-4 right-4 bg-[#ff336d] text-white px-3.5 py-1.5 rounded-2xl flex flex-col items-center shadow-lg">
+            <span className="font-display text-2xl font-black leading-none">
+              {game.rating ?? game.bgg_rating ? (game.rating ?? game.bgg_rating)?.toFixed(1) : '—'}
             </span>
-            <span className="text-[9px] font-bold tracking-wider mt-0.5 uppercase opacity-90">
+            <span className="text-[9px] font-bold tracking-wider mt-1 uppercase opacity-95">
               BGG RATING
             </span>
           </div>
@@ -56,21 +87,21 @@ export default function GameDetailPage() {
         {/* Content Body */}
         <div className="p-5 space-y-6">
           {/* Tags */}
-          <div className="flex gap-2 text-xs font-bold">
+          <div className="flex gap-2 text-xs font-semibold">
             <span className="bg-[#0e2730] text-[#38e1ff] px-2.5 py-1 rounded-lg border border-[#173e4d]">
               {game.categories?.[0] || 'Family'}
             </span>
             <span className="bg-[#12182c] text-[#8ba2c4] px-2.5 py-1 rounded-lg border border-[#1f294a]">
-              In collection · EN
+              In collection · {(game as unknown as { language?: string }).language || 'EN'}
             </span>
           </div>
 
           {/* Title & Headline */}
           <div>
-            <h1 className="text-2xl font-black text-white leading-tight">
+            <h1 className="font-display text-3xl font-black text-white leading-tight">
               {game.title}
             </h1>
-            <p className="text-xs text-[#7e94b8] font-semibold mt-1">
+            <p className="text-xs text-[#7e94b8] font-medium mt-1.5 italic">
               {game.year_published ?? '—'} · {game.min_players}–{game.max_players} players ·{' '}
               {game.min_playtime}–{game.max_playtime ?? game.min_playtime} min
             </p>
@@ -79,20 +110,22 @@ export default function GameDetailPage() {
           {/* Action Button: Log Play */}
           <button
             onClick={() => setIsLoggingPlay(true)}
-            className="w-full h-12 rounded-2xl bg-[#38e1ff] text-black font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-[#38e1ff]/30 active:scale-[0.98] transition-transform"
+            className="w-full h-12 rounded-2xl bg-[#38e1ff] text-black font-display font-black text-sm flex items-center justify-center gap-2.5 shadow-lg shadow-[#38e1ff]/30 active:scale-[0.98] transition-transform"
           >
-            <span>🎲</span>
+            <DiceIcon size={18} />
             <span>Log a play</span>
           </button>
 
           {/* About Section */}
           <div className="space-y-1.5">
-            <h2 className="text-base font-bold text-white">About</h2>
+            <h2 className="font-display text-lg font-bold text-white">About</h2>
             {/* <p className="text-xs text-[#9bb2d4] leading-relaxed">
               {game.description ||
-                'A whodunit in the board game world. Gather your companions and test your wits with cards, mechanics, and clues.'}
+                'A whodunit in the animal kingdom. Narrow down the culprit by eliminating suspects with cards and clues.'}
             </p> */}
-            <button className="text-xs font-bold text-[#38e1ff]">Read more</button>
+            <button className="text-xs font-bold text-[#38e1ff] hover:underline">
+              Read more
+            </button>
             <p className="text-[10px] text-[#55698a] pt-1">
               Description from BoardGameGeek
             </p>
@@ -100,40 +133,49 @@ export default function GameDetailPage() {
 
           {/* 4 Stats Boxes */}
           <div className="grid grid-cols-2 gap-3">
+            {/* Players */}
             <div className="p-3.5 rounded-2xl bg-[#0f1426] border border-[#1d2644]">
-              <span className="text-sm">👥</span>
-              <div className="text-lg font-black text-white mt-1">
+              <UsersIcon size={18} className="text-[#38e1ff]" />
+              <div className="font-display text-2xl font-black text-white mt-1.5">
                 {game.min_players}–{game.max_players}
               </div>
-              <div className="text-[10px] text-[#6e82a3] font-bold">Players</div>
+              <div className="text-[11px] text-[#6e82a3] font-medium mt-0.5">Players</div>
             </div>
 
+            {/* Play time */}
             <div className="p-3.5 rounded-2xl bg-[#0f1426] border border-[#1d2644]">
-              <span className="text-sm">⏱</span>
-              <div className="text-lg font-black text-white mt-1">
+              <ClockIcon size={18} className="text-[#38e1ff]" />
+              <div className="font-display text-2xl font-black text-white mt-1.5">
                 {game.min_playtime}–{game.max_playtime ?? game.min_playtime} min
               </div>
-              <div className="text-[10px] text-[#6e82a3] font-bold">Play time</div>
+              <div className="text-[11px] text-[#6e82a3] font-medium mt-0.5">Play time</div>
             </div>
 
+            {/* Published */}
             <div className="p-3.5 rounded-2xl bg-[#0f1426] border border-[#1d2644]">
-              <span className="text-sm">📅</span>
-              <div className="text-lg font-black text-white mt-1">
+              <CalendarIcon size={18} className="text-[#38e1ff]" />
+              <div className="font-display text-2xl font-black text-white mt-1.5">
                 {game.year_published ?? '—'}
               </div>
-              <div className="text-[10px] text-[#6e82a3] font-bold">Published</div>
+              <div className="text-[11px] text-[#6e82a3] font-medium mt-0.5">Published</div>
             </div>
 
+            {/* Complexity Weight */}
             <div className="p-3.5 rounded-2xl bg-[#0f1426] border border-[#1d2644]">
-              <span className="text-sm">⚖</span>
-              <div className="text-lg font-black text-white mt-1">
-                {game.complexity_weight?.toFixed(1) ?? '1.2'} <span className="text-xs font-normal text-[#6e82a3]">/ 5</span>
+              <DumbbellIcon size={18} className="text-[#38e1ff]" />
+              <div className="font-display text-2xl font-black text-white mt-1.5">
+                {(game.weight ?? game.complexity_weight ?? 1.2).toFixed(1)}{' '}
+                <span className="text-xs font-normal text-[#6e82a3]">/ 5</span>
               </div>
-              <div className="text-[10px] text-[#6e82a3] font-bold">Light</div>
-              <div className="w-full bg-[#1b2545] h-1 rounded-full mt-2 overflow-hidden">
+              <div className="text-[11px] text-[#6e82a3] font-medium mt-0.5">
+                {getWeightLabel(game.weight ?? game.complexity_weight)}
+              </div>
+              <div className="w-full bg-[#1b2545] h-1 rounded-full mt-2.5 overflow-hidden">
                 <div
-                  className="bg-[#38e1ff] h-full"
-                  style={{ width: `${((game.complexity_weight ?? 1.2) / 5) * 100}%` }}
+                  className="bg-[#38e1ff] h-full rounded-full"
+                  style={{
+                    width: `${Math.min(100, (((game.weight ?? game.complexity_weight ?? 1.2) / 5) * 100))}%`,
+                  }}
                 />
               </div>
             </div>
@@ -141,7 +183,9 @@ export default function GameDetailPage() {
 
           {/* Mechanics */}
           <div>
-            <h3 className="text-sm font-bold text-white mb-2">Mechanics</h3>
+            <h3 className="font-display text-base font-bold text-white mb-2.5">
+              Mechanics
+            </h3>
             <div className="flex flex-wrap gap-2">
               {(game.mechanics || ['Deduction', 'Hand Management']).map((m) => (
                 <span
@@ -156,7 +200,9 @@ export default function GameDetailPage() {
 
           {/* Themes */}
           <div>
-            <h3 className="text-sm font-bold text-white mb-2">Themes</h3>
+            <h3 className="font-display text-base font-bold text-white mb-2.5">
+              Themes
+            </h3>
             <div className="flex flex-wrap gap-2">
               {['Animals', 'Mystery'].map((t) => (
                 <span
@@ -172,26 +218,27 @@ export default function GameDetailPage() {
           {/* Expansions */}
           <div className="flex items-center justify-between border-t border-[#1a223d] pt-4">
             <div>
-              <h3 className="text-sm font-bold text-white">Expansions</h3>
-              <p className="text-xs text-[#6e82a3]">None listed</p>
+              <h3 className="font-display text-base font-bold text-white">Expansions</h3>
+              <p className="text-xs text-[#6e82a3] mt-0.5">None listed</p>
             </div>
-            <span className="text-[#6e82a3]">⌄</span>
+            <ChevronDownIcon size={20} className="text-[#6e82a3]" />
           </div>
 
           {/* Plays Section */}
           <div className="border-t border-[#1a223d] pt-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-white">Plays</h3>
-                <p className="text-xs text-[#6e82a3]">
+                <h3 className="font-display text-base font-bold text-white">Plays</h3>
+                <p className="text-xs text-[#6e82a3] mt-0.5">
                   {playCount > 0 ? `${playCount} logged` : 'Nothing logged'}
                 </p>
               </div>
               <button
                 onClick={() => setIsLoggingPlay(true)}
-                className="h-8 px-3 rounded-xl bg-[#141b34] border border-[#202a4e] text-xs font-bold text-white flex items-center gap-1 active:scale-95"
+                className="h-8 px-3.5 rounded-xl bg-[#141b34] border border-[#202a4e] text-xs font-bold text-white flex items-center gap-1.5 active:scale-95 transition-transform"
               >
-                + Log
+                <PlusIcon size={13} />
+                <span>Log</span>
               </button>
             </div>
 
@@ -217,16 +264,16 @@ export default function GameDetailPage() {
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setPlayerCount(Math.max(1, playerCount - 1))}
-                      className="w-7 h-7 rounded-full bg-[#1b2342] text-white flex items-center justify-center font-bold"
+                      className="w-8 h-8 rounded-xl bg-[#1b2342] text-white flex items-center justify-center font-bold active:scale-95"
                     >
-                      –
+                      <MinusIcon size={14} />
                     </button>
-                    <span className="text-sm font-bold">{playerCount}</span>
+                    <span className="font-display text-lg font-bold">{playerCount}</span>
                     <button
                       onClick={() => setPlayerCount(playerCount + 1)}
-                      className="w-7 h-7 rounded-full bg-[#1b2342] text-white flex items-center justify-center font-bold"
+                      className="w-8 h-8 rounded-xl bg-[#1b2342] text-white flex items-center justify-center font-bold active:scale-95"
                     >
-                      +
+                      <PlusIcon size={14} />
                     </button>
                   </div>
                 </div>
@@ -247,13 +294,13 @@ export default function GameDetailPage() {
                 <div className="flex gap-2 pt-1">
                   <button
                     onClick={() => setIsLoggingPlay(false)}
-                    className="flex-1 py-2 rounded-xl text-xs font-bold text-[#8ba2c4]"
+                    className="flex-1 py-2.5 rounded-xl text-xs font-bold text-[#8ba2c4] bg-[#141a31] border border-[#212c52]"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleSavePlay}
-                    className="flex-1 py-2 rounded-xl bg-[#38e1ff] text-black text-xs font-bold shadow-md shadow-[#38e1ff]/30"
+                    className="flex-1 py-2.5 rounded-xl bg-[#38e1ff] text-black text-xs font-bold shadow-md shadow-[#38e1ff]/30 active:scale-95 transition-transform"
                   >
                     Save play
                   </button>
@@ -267,33 +314,33 @@ export default function GameDetailPage() {
           </div>
 
           {/* Footer Management Actions */}
-          <div className="pt-4 space-y-4">
-            <button className="w-full h-11 rounded-2xl bg-[#0f1426] border border-[#1d2644] text-xs font-bold text-white flex items-center justify-center gap-2">
-              <span>↻</span>
+          <div className="pt-2 space-y-3">
+            <button className="w-full h-11 rounded-2xl bg-[#0f1426] border border-[#1d2644] text-xs font-bold text-white flex items-center justify-center gap-2 active:scale-98 transition-transform">
+              <RefreshIcon size={15} />
               <span>Refresh from BGG</span>
             </button>
-            <button className="w-full text-center text-xs font-bold text-[#ff336d]">
+            <button className="w-full text-center text-xs font-bold text-[#ff336d] py-2 hover:underline">
               Remove game
             </button>
           </div>
         </div>
 
-        {/* Floating Bottom Nav */}
+        {/* Floating Bottom Navigation */}
         <nav className="fixed bottom-5 left-0 right-0 z-40 max-w-sm mx-auto px-4">
           <div className="bg-[#0b0f1e]/90 backdrop-blur-xl border border-[#1e2646] p-1.5 rounded-2xl flex items-center justify-between shadow-2xl">
             <Link
               href="/"
               className="flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold bg-[#38e1ff] text-black shadow-lg shadow-[#38e1ff]/30"
             >
-              <span>📖</span>
+              <BookIcon size={16} />
               <span>Collection</span>
             </Link>
             <button className="flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold text-[#8ba2c4]">
-              <span>♡</span>
+              <HeartIcon size={16} />
               <span>Wanted</span>
             </button>
             <button className="flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold text-[#8ba2c4]">
-              <span>⊕</span>
+              <PlusCircleIcon size={16} />
               <span>Add</span>
             </button>
           </div>
