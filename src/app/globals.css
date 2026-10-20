@@ -4,20 +4,47 @@
   --font-display: var(--font-display), system-ui, sans-serif;
   --font-sans: var(--font-sans), system-ui, sans-serif;
 
-  --color-theme-bg: #070913;
-  --color-theme-surface: #0f1426;
-  --color-theme-surface-border: #1c243f;
-  --color-theme-surface-light: #18203b;
-  --color-theme-cyan: #38e1ff;
-  --color-theme-pink: #ff336d;
+  --color-theme-cyan: #0e8396;
+  --color-theme-pink: #d91c5c;
+}
+
+/* Light Mode Defaults */
+:root {
+  --bg-app: #eef2f8;
+  --bg-surface: #ffffff;
+  --border-surface: #d1dcf0;
+  --bg-surface-elevated: #dde5f4;
+  --border-surface-elevated: #b0c4de;
+  --text-primary: #0a1128;
+  --text-muted: #536482;
+  --text-dim: #8b9bb5;
+  --bg-hero: #bfe0e8;
+  --watermark: rgba(14, 131, 150, 0.25);
+  --bg-nav: rgba(255, 255, 255, 0.92);
+}
+
+/* Dark Mode Overrides */
+.dark {
+  --bg-app: #070913;
+  --bg-surface: #0f1426;
+  --border-surface: #1d2644;
+  --bg-surface-elevated: #141b34;
+  --border-surface-elevated: #202a4e;
+  --text-primary: #ffffff;
+  --text-muted: #8ba2c4;
+  --text-dim: #55698a;
+  --bg-hero: #143b47;
+  --watermark: rgba(56, 225, 255, 0.35);
+  --bg-nav: rgba(11, 15, 30, 0.92);
 }
 
 html,
 body {
-  background-color: var(--color-theme-bg);
-  color: #ffffff;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
   overscroll-behavior-y: none;
   -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 h1, h2, h3, .font-display {

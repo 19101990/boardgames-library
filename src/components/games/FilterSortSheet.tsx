@@ -11,6 +11,7 @@ interface FilterSortSheetProps {
   setSortBy: (val: string) => void;
   onReset: () => void;
   totalResults: number;
+  isDark: boolean;
 }
 
 export function FilterSortSheet({
@@ -24,25 +25,33 @@ export function FilterSortSheet({
   setSortBy,
   onReset,
   totalResults,
+  isDark,
 }: FilterSortSheetProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70">
-      {/* Tap backdrop to close */}
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80">
       <div className="absolute inset-0" onClick={onClose} />
 
-      {/* Slide-up Container */}
-      <div className="relative z-10 w-full max-w-md rounded-t-3xl bg-[#090c19] border-t border-[#1e2646] p-5 pb-8 shadow-2xl animate-in slide-in-from-bottom duration-200">
-        {/* Grab Handle */}
-        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-[#27325c]" />
+      <div
+        style={{
+          backgroundColor: 'var(--bg-surface)',
+          borderColor: 'var(--border-surface)',
+        }}
+        className="relative z-10 w-full max-w-md rounded-t-3xl border-t p-5 pb-8 shadow-2xl animate-in slide-in-from-bottom duration-200"
+      >
+        <div
+          style={{ backgroundColor: 'var(--border-surface-elevated)' }}
+          className="mx-auto mb-4 h-1.5 w-12 rounded-full"
+        />
 
-        {/* Title Bar */}
         <div className="flex items-center justify-between pb-4">
-          <h2 className="text-xl font-black tracking-tight text-white">Filter & sort</h2>
+          <h2 style={{ color: 'var(--text-primary)' }} className="text-xl font-black tracking-tight">
+            Filter & sort
+          </h2>
           <button
             onClick={onReset}
-            className="text-xs font-bold text-[#38e1ff] hover:underline"
+            className="text-xs font-bold text-[#0e8396] dark:text-[#38e1ff] hover:underline"
           >
             Reset
           </button>
@@ -51,7 +60,7 @@ export function FilterSortSheet({
         <div className="space-y-5">
           {/* Players */}
           <div>
-            <label className="text-xs font-semibold text-[#8ba2c4] mb-2 block">
+            <label style={{ color: 'var(--text-muted)' }} className="text-xs font-semibold mb-2 block">
               Players
             </label>
             <div className="flex flex-wrap gap-2">
@@ -61,8 +70,8 @@ export function FilterSortSheet({
                   onClick={() => setPlayers(opt)}
                   className={`h-9 min-w-[42px] px-3 rounded-xl text-xs font-bold transition-colors ${
                     players === opt
-                      ? 'bg-[#38e1ff] text-black shadow-lg shadow-[#38e1ff]/30'
-                      : 'bg-[#151c36] text-[#8ba2c4] border border-[#212c54]'
+                      ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-md'
+                      : 'bg-[var(--bg-surface-elevated)] text-[var(--text-muted)] border border-[var(--border-surface-elevated)]'
                   }`}
                 >
                   {opt}
@@ -73,7 +82,7 @@ export function FilterSortSheet({
 
           {/* Play time */}
           <div>
-            <label className="text-xs font-semibold text-[#8ba2c4] mb-2 block">
+            <label style={{ color: 'var(--text-muted)' }} className="text-xs font-semibold mb-2 block">
               Play time
             </label>
             <div className="flex flex-wrap gap-2">
@@ -83,8 +92,8 @@ export function FilterSortSheet({
                   onClick={() => setPlayTime(opt)}
                   className={`h-9 px-4 rounded-xl text-xs font-bold transition-colors ${
                     playTime === opt
-                      ? 'bg-[#38e1ff] text-black shadow-lg shadow-[#38e1ff]/30'
-                      : 'bg-[#151c36] text-[#8ba2c4] border border-[#212c54]'
+                      ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-md'
+                      : 'bg-[var(--bg-surface-elevated)] text-[var(--text-muted)] border border-[var(--border-surface-elevated)]'
                   }`}
                 >
                   {opt}
@@ -95,7 +104,7 @@ export function FilterSortSheet({
 
           {/* Sort by */}
           <div>
-            <label className="text-xs font-semibold text-[#8ba2c4] mb-2 block">
+            <label style={{ color: 'var(--text-muted)' }} className="text-xs font-semibold mb-2 block">
               Sort by
             </label>
             <div className="flex flex-wrap gap-2">
@@ -112,8 +121,8 @@ export function FilterSortSheet({
                   onClick={() => setSortBy(opt.id)}
                   className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-colors ${
                     sortBy === opt.id
-                      ? 'bg-[#38e1ff] text-black shadow-lg shadow-[#38e1ff]/30'
-                      : 'bg-[#151c36] text-[#8ba2c4] border border-[#212c54]'
+                      ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-md'
+                      : 'bg-[var(--bg-surface-elevated)] text-[var(--text-muted)] border border-[var(--border-surface-elevated)]'
                   }`}
                 >
                   {opt.label}
@@ -125,7 +134,7 @@ export function FilterSortSheet({
           {/* Action CTA Button */}
           <button
             onClick={onClose}
-            className="w-full mt-2 h-12 rounded-2xl bg-[#38e1ff] text-black font-black text-sm tracking-wide shadow-lg shadow-[#38e1ff]/30 active:scale-[0.98] transition-transform"
+            className="w-full mt-2 h-12 rounded-2xl bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black font-black text-sm tracking-wide shadow-lg active:scale-[0.98] transition-transform"
           >
             Show {totalResults} games
           </button>
