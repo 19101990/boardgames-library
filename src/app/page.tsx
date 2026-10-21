@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
-import { INITIAL_GAMES } from '@/data/mockGames';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { supabase } from '@/lib/supabase';
 import { GameCard } from '@/components/games/GameCard';
 import { AddGameForm } from '@/components/games/AddGameForm';
 import { FilterSortSheet } from '@/components/games/FilterSortSheet';
@@ -20,7 +20,10 @@ import {
 } from '@/components/ui/Icons';
 
 export default function CollectionPage() {
-  const [games, setGames] = useState<BoardGame[]>(INITIAL_GAMES);
+  const [games, setGames] = useState<BoardGame[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -28,6 +31,30 @@ export default function CollectionPage() {
 
   // Wanted modal state
   const [selectedWantedGame, setSelectedWantedGame] = useState<BoardGame | null>(null);
+
+  // Fetch games from Supabase
+  const fetchGames = useCallback(async () => {
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    const { data, error } = await supabase
+      .from('games')
+      .select('*')
+      .order('title', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching games from Supabase:', error);
+      setErrorMessage(error.message);
+    } else if (data) {
+      setGames(data as BoardGame[]);
+    }
+
+    setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchGames();
+  }, [fetchGames]);
 
   // Sync theme state on mount
   useEffect(() => {
@@ -87,8 +114,8 @@ export default function CollectionPage() {
       })
       .sort((a, b) => {
         if (sortBy === 'title') return a.title.localeCompare(b.title);
-        if (sortBy === 'rating') return (b.bgg_rating ?? b.bgg_rating ?? 0) - (a.bgg_rating ?? a.bgg_rating ?? 0);
-        if (sortBy === 'weight') return (a.complexity_weight ?? a.complexity_weight ?? 0) - (b.complexity_weight ?? b.complexity_weight ?? 0);
+        if (sortBy === 'rating') return (b.rating ?? b.bgg_rating ?? 0) - (a.rating ?? a.bgg_rating ?? 0);
+        if (sortBy === 'weight') return (a.weight ?? a.complexity_weight ?? 0) - (b.weight ?? b.complexity_weight ?? 0);
         if (sortBy === 'newest') return (b.year_published ?? 0) - (a.year_published ?? 0);
         if (sortBy === 'shortest') return (a.min_playtime ?? 0) - (b.min_playtime ?? 0);
         if (sortBy === 'language') {
@@ -110,21 +137,22 @@ export default function CollectionPage() {
   const ownedCount = games.filter((g) => g.status === 'owned').length;
   const wantedCount = games.filter((g) => g.status === 'wishlist').length;
 
-  const handleAddNewGame = (newGame: Partial<BoardGame>, targetStatus: 'owned' | 'wishlist') => {
+  const handleAddNewGame = async (newGame: Partial<BoardGame>, targetStatus: 'owned' | 'wishlist') => {
+    // Optimistic local state update
     setGames((prev) => [newGame as BoardGame, ...prev]);
     setActiveTab(targetStatus === 'owned' ? 'collection' : 'wanted');
   };
 
-  const handleMoveToCollection = (gameId: string, language: string) => {
+  const handleMoveToCollection = async (gameId: string, language: string) => {
+    // Optimistic local update
     setGames((prev) =>
-      prev.map((g) =>
-        g.id === gameId ? { ...g, status: 'owned', language } : g
-      )
+      prev.map((g) => (g.id === gameId ? { ...g, status: 'owned', language } : g))
     );
     setActiveTab('collection');
   };
 
-  const handleRemoveFromWanted = (gameId: string) => {
+  const handleRemoveFromWanted = async (gameId: string) => {
+    // Optimistic local update
     setGames((prev) => prev.filter((g) => g.id !== gameId));
   };
 
@@ -167,7 +195,7 @@ export default function CollectionPage() {
                   {activeTab === 'wanted' ? 'Wanted' : 'Collection'}
                 </h1>
 
-                {/* Right Action Buttons */}
+                {/* Header Action Buttons */}
                 <div className="flex items-center gap-2.5">
                   <button
                     onClick={toggleTheme}
@@ -226,7 +254,6 @@ export default function CollectionPage() {
                   )}
                 </div>
 
-                {/* Filter Sheet Trigger */}
                 <button
                   onClick={() => setIsFilterOpen(true)}
                   aria-label="Open Filter and Sort Sheet"
@@ -248,6 +275,22 @@ export default function CollectionPage() {
         <main className="px-5 pt-3 flex-1">
           {activeTab === 'add' ? (
             <AddGameForm onAddGame={handleAddNewGame} />
+          ) : isLoading ? (
+            <div className="py-28 flex flex-col items-center justify-center gap-3 text-[var(--text-muted)]">
+              <div className="w-7 h-7 border-2 border-current border-t-transparent rounded-full animate-spin text-[#0e8396] dark:text-[#38e1ff]" />
+              <p className="text-xs font-semibold tracking-wide">Loading library...</p>
+            </div>
+          ) : errorMessage ? (
+            <div className="py-20 text-center space-y-2">
+              <p className="text-sm font-bold text-[#ff336d]">Failed to load games</p>
+              <p className="text-xs text-[var(--text-muted)]">{errorMessage}</p>
+              <button
+                onClick={fetchGames}
+                className="mt-3 px-4 py-2 rounded-xl text-xs font-bold bg-[var(--bg-surface-elevated)] border border-[var(--border-surface-elevated)]"
+              >
+                Retry
+              </button>
+            </div>
           ) : filteredGames.length === 0 ? (
             <div className="py-24 text-center text-sm font-semibold text-[#536482] dark:text-[#8ba2c4]">
               No games match your filters.
