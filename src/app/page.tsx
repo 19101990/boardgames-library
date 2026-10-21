@@ -3,9 +3,12 @@
 import { useState, useMemo, useEffect } from 'react';
 import { INITIAL_GAMES } from '@/data/mockGames';
 import { GameCard } from '@/components/games/GameCard';
+import { AddGameForm } from '@/components/games/AddGameForm';
 import { FilterSortSheet } from '@/components/games/FilterSortSheet';
+import { BoardGame } from '@/types/types';
 import {
   SunIcon,
+  MoonIcon,
   GridIcon,
   ListIcon,
   SearchIcon,
@@ -16,7 +19,7 @@ import {
 } from '@/components/ui/Icons';
 
 export default function CollectionPage() {
-  const [games] = useState(INITIAL_GAMES);
+  const [games, setGames] = useState<BoardGame[]>(INITIAL_GAMES);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -80,8 +83,8 @@ export default function CollectionPage() {
       })
       .sort((a, b) => {
         if (sortBy === 'title') return a.title.localeCompare(b.title);
-        if (sortBy === 'rating') return (b.rating ?? 0) - (a.rating ?? 0);
-        if (sortBy === 'weight') return (a.weight ?? 0) - (b.weight ?? 0);
+        if (sortBy === 'rating') return (b.bgg_rating ?? b.bgg_rating ?? 0) - (a.bgg_rating ?? a.bgg_rating ?? 0);
+        if (sortBy === 'weight') return (a.complexity_weight ?? a.complexity_weight ?? 0) - (b.complexity_weight ?? b.complexity_weight ?? 0);
         if (sortBy === 'newest') return (b.year_published ?? 0) - (a.year_published ?? 0);
         if (sortBy === 'shortest') return (a.min_playtime ?? 0) - (b.min_playtime ?? 0);
         if (sortBy === 'language') {
@@ -101,6 +104,12 @@ export default function CollectionPage() {
   };
 
   const ownedCount = games.filter((g) => g.status === 'owned').length;
+  const wantedCount = games.filter((g) => g.status === 'wishlist').length;
+
+  const handleAddNewGame = (newGame: Partial<BoardGame>, targetStatus: 'owned' | 'wishlist') => {
+    setGames((prev) => [newGame as BoardGame, ...prev]);
+    setActiveTab(targetStatus === 'owned' ? 'collection' : 'wanted');
+  };
 
   return (
     <div style={{ backgroundColor: 'var(--bg-app)', color: 'var(--text-primary)' }} className="min-h-screen">
@@ -108,90 +117,122 @@ export default function CollectionPage() {
         
         {/* Top Header */}
         <header className="px-5 pt-7 pb-3">
-          <p className="text-xs font-semibold italic text-[#0e8396] dark:text-[#38e1ff] tracking-wide">
-            {ownedCount} games owned
-          </p>
-          <div className="flex items-center justify-between mt-1">
-            <h1 className="font-display text-3xl font-black tracking-tight">
-              Collection
-            </h1>
-
-            {/* Header Right Icon Buttons */}
-            <div className="flex items-center gap-2.5">
-              <button
-                onClick={toggleTheme}
-                style={{
-                  backgroundColor: 'var(--bg-surface-elevated)',
-                  borderColor: 'var(--border-surface-elevated)',
-                  color: 'var(--text-primary)',
-                }}
-                className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform"
-                title="Toggle Theme"
-              >
-                <SunIcon size={18} />
-              </button>
-              <button
-                onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                style={{
-                  backgroundColor: 'var(--bg-surface-elevated)',
-                  borderColor: 'var(--border-surface-elevated)',
-                  color: 'var(--text-primary)',
-                }}
-                className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform text-sm"
-                title="Toggle View Mode"
-              >
-                {viewMode === 'grid' ? <ListIcon size={18} /> : <GridIcon size={18} />}
-              </button>
-            </div>
-          </div>
-
-          {/* Search + Filter Row */}
-          <div className="flex items-center gap-2.5 mt-4">
-            <div
-              style={{
-                backgroundColor: 'var(--bg-surface-elevated)',
-                borderColor: 'var(--border-surface-elevated)',
-              }}
-              className="flex-1 relative flex items-center h-12 border rounded-2xl px-3.5"
-            >
-              <SearchIcon size={16} className="text-[#536482] dark:text-[#62779c] mr-2.5 shrink-0" />
-              <input
-                type="text"
-                placeholder="Title, mechanic, theme"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                style={{ color: 'var(--text-primary)' }}
-                className="w-full bg-transparent text-sm placeholder-[#536482] dark:placeholder-[#62779c] focus:outline-none font-medium"
-              />
-              {search && (
+          {activeTab === 'add' ? (
+            <div>
+              <p className="text-xs font-semibold italic text-[#0e8396] dark:text-[#38e1ff] tracking-wide">
+                Three quick steps
+              </p>
+              <div className="flex items-center justify-between mt-1">
+                <h1 className="font-display text-3xl font-black tracking-tight">
+                  Add a game
+                </h1>
                 <button
-                  onClick={() => setSearch('')}
-                  className="text-xs text-[#536482] dark:text-[#62779c] px-1"
+                  onClick={toggleTheme}
+                  aria-label="Toggle Theme"
+                  style={{
+                    backgroundColor: 'var(--bg-surface-elevated)',
+                    borderColor: 'var(--border-surface-elevated)',
+                    color: 'var(--text-primary)',
+                  }}
+                  className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform"
                 >
-                  ✕
+                  {isDark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
                 </button>
-              )}
+              </div>
             </div>
+          ) : (
+            <div>
+              <p className="text-xs font-semibold italic text-[#0e8396] dark:text-[#38e1ff] tracking-wide">
+                {activeTab === 'wanted' ? `${wantedCount} games wanted` : `${ownedCount} games owned`}
+              </p>
+              <div className="flex items-center justify-between mt-1">
+                <h1 className="font-display text-3xl font-black tracking-tight">
+                  {activeTab === 'wanted' ? 'Wanted' : 'Collection'}
+                </h1>
 
-            {/* Filter Sheet Trigger */}
-            <button
-              onClick={() => setIsFilterOpen(true)}
-              style={{
-                backgroundColor: 'var(--bg-surface-elevated)',
-                borderColor: 'var(--border-surface-elevated)',
-                color: 'var(--text-primary)',
-              }}
-              className="w-12 h-12 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform shrink-0"
-            >
-              <SlidersIcon size={18} />
-            </button>
-          </div>
+                {/* Right Action Buttons */}
+                <div className="flex items-center gap-2.5">
+                  <button
+                    onClick={toggleTheme}
+                    aria-label="Toggle Theme"
+                    style={{
+                      backgroundColor: 'var(--bg-surface-elevated)',
+                      borderColor: 'var(--border-surface-elevated)',
+                      color: 'var(--text-primary)',
+                    }}
+                    className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform"
+                    title="Toggle Theme"
+                  >
+                    {isDark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
+                  </button>
+                  <button
+                    onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                    aria-label="Toggle View Mode"
+                    style={{
+                      backgroundColor: 'var(--bg-surface-elevated)',
+                      borderColor: 'var(--border-surface-elevated)',
+                      color: 'var(--text-primary)',
+                    }}
+                    className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform text-sm"
+                    title="Toggle View Mode"
+                  >
+                    {viewMode === 'grid' ? <ListIcon size={18} /> : <GridIcon size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Search + Filter Row */}
+              <div className="flex items-center gap-2.5 mt-4">
+                <div
+                  style={{
+                    backgroundColor: 'var(--bg-surface-elevated)',
+                    borderColor: 'var(--border-surface-elevated)',
+                  }}
+                  className="flex-1 relative flex items-center h-12 border rounded-2xl px-3.5"
+                >
+                  <SearchIcon size={16} className="text-[#536482] dark:text-[#62779c] mr-2.5 shrink-0" />
+                  <input
+                    type="text"
+                    placeholder="Title, mechanic, theme"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    style={{ color: 'var(--text-primary)' }}
+                    className="w-full bg-transparent text-sm placeholder-[#536482] dark:placeholder-[#62779c] focus:outline-none font-medium"
+                  />
+                  {search && (
+                    <button
+                      onClick={() => setSearch('')}
+                      className="text-xs text-[#536482] dark:text-[#62779c] px-1"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter Sheet Trigger */}
+                <button
+                  onClick={() => setIsFilterOpen(true)}
+                  aria-label="Open Filter and Sort Sheet"
+                  style={{
+                    backgroundColor: 'var(--bg-surface-elevated)',
+                    borderColor: 'var(--border-surface-elevated)',
+                    color: 'var(--text-primary)',
+                  }}
+                  className="w-12 h-12 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform shrink-0"
+                >
+                  <SlidersIcon size={18} />
+                </button>
+              </div>
+            </div>
+          )}
         </header>
 
-        {/* Game List / Grid */}
+        {/* Content Body */}
         <main className="px-5 pt-3 flex-1">
-          {filteredGames.length === 0 ? (
-            <div className="py-24 text-center text-sm font-semibold text-[#536482]">
+          {activeTab === 'add' ? (
+            <AddGameForm onAddGame={handleAddNewGame} />
+          ) : filteredGames.length === 0 ? (
+            <div className="py-24 text-center text-sm font-semibold text-[#536482] dark:text-[#8ba2c4]">
               No games match your filters.
             </div>
           ) : viewMode === 'grid' ? (
@@ -209,7 +250,7 @@ export default function CollectionPage() {
           )}
         </main>
 
-        {/* Bottom Floating Navigation Bar */}
+        {/* Floating Bottom Navigation Bar */}
         <nav className="fixed bottom-5 left-0 right-0 z-40 max-w-sm mx-auto px-4">
           <div
             style={{
@@ -222,8 +263,8 @@ export default function CollectionPage() {
               onClick={() => setActiveTab('collection')}
               className={`flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all ${
                 activeTab === 'collection'
-                  ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg'
-                  : 'text-[#536482] dark:text-[#8ba2c4] hover:text-white'
+                  ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg shadow-[#0e8396]/20 dark:shadow-[#38e1ff]/20'
+                  : 'text-[#536482] dark:text-[#8ba2c4]'
               }`}
             >
               <BookIcon size={16} />
@@ -234,8 +275,8 @@ export default function CollectionPage() {
               onClick={() => setActiveTab('wanted')}
               className={`flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all ${
                 activeTab === 'wanted'
-                  ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg'
-                  : 'text-[#536482] dark:text-[#8ba2c4] hover:text-white'
+                  ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg shadow-[#0e8396]/20 dark:shadow-[#38e1ff]/20'
+                  : 'text-[#536482] dark:text-[#8ba2c4]'
               }`}
             >
               <HeartIcon size={16} />
@@ -246,8 +287,8 @@ export default function CollectionPage() {
               onClick={() => setActiveTab('add')}
               className={`flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all ${
                 activeTab === 'add'
-                  ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg'
-                  : 'text-[#536482] dark:text-[#8ba2c4] hover:text-white'
+                  ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg shadow-[#0e8396]/20 dark:shadow-[#38e1ff]/20'
+                  : 'text-[#536482] dark:text-[#8ba2c4]'
               }`}
             >
               <PlusCircleIcon size={16} />
