@@ -5,6 +5,7 @@ import { INITIAL_GAMES } from '@/data/mockGames';
 import { GameCard } from '@/components/games/GameCard';
 import { AddGameForm } from '@/components/games/AddGameForm';
 import { FilterSortSheet } from '@/components/games/FilterSortSheet';
+import { MoveToCollectionSheet } from '@/components/games/MoveToCollectionSheet';
 import { BoardGame } from '@/types/types';
 import {
   SunIcon,
@@ -24,6 +25,9 @@ export default function CollectionPage() {
   const [search, setSearch] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isDark, setIsDark] = useState(true);
+
+  // Wanted modal state
+  const [selectedWantedGame, setSelectedWantedGame] = useState<BoardGame | null>(null);
 
   // Sync theme state on mount
   useEffect(() => {
@@ -109,6 +113,19 @@ export default function CollectionPage() {
   const handleAddNewGame = (newGame: Partial<BoardGame>, targetStatus: 'owned' | 'wishlist') => {
     setGames((prev) => [newGame as BoardGame, ...prev]);
     setActiveTab(targetStatus === 'owned' ? 'collection' : 'wanted');
+  };
+
+  const handleMoveToCollection = (gameId: string, language: string) => {
+    setGames((prev) =>
+      prev.map((g) =>
+        g.id === gameId ? { ...g, status: 'owned', language } : g
+      )
+    );
+    setActiveTab('collection');
+  };
+
+  const handleRemoveFromWanted = (gameId: string) => {
+    setGames((prev) => prev.filter((g) => g.id !== gameId));
   };
 
   return (
@@ -238,13 +255,23 @@ export default function CollectionPage() {
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-2 gap-3.5">
               {filteredGames.map((game) => (
-                <GameCard key={game.id} game={game} viewMode="grid" />
+                <GameCard
+                  key={game.id}
+                  game={game}
+                  viewMode="grid"
+                  onCardClick={activeTab === 'wanted' ? (g) => setSelectedWantedGame(g) : undefined}
+                />
               ))}
             </div>
           ) : (
             <div className="flex flex-col gap-3">
               {filteredGames.map((game) => (
-                <GameCard key={game.id} game={game} viewMode="list" />
+                <GameCard
+                  key={game.id}
+                  game={game}
+                  viewMode="list"
+                  onCardClick={activeTab === 'wanted' ? (g) => setSelectedWantedGame(g) : undefined}
+                />
               ))}
             </div>
           )}
@@ -310,6 +337,15 @@ export default function CollectionPage() {
           onReset={handleReset}
           totalResults={filteredGames.length}
           isDark={isDark}
+        />
+
+        {/* Move from Wanted to Collection Sheet Modal */}
+        <MoveToCollectionSheet
+          game={selectedWantedGame}
+          isOpen={!!selectedWantedGame}
+          onClose={() => setSelectedWantedGame(null)}
+          onMoveToCollection={handleMoveToCollection}
+          onRemoveFromWanted={handleRemoveFromWanted}
         />
       </div>
     </div>
