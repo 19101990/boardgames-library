@@ -138,22 +138,78 @@ export default function CollectionPage() {
   const wantedCount = games.filter((g) => g.status === 'wishlist').length;
 
   const handleAddNewGame = async (newGame: Partial<BoardGame>, targetStatus: 'owned' | 'wishlist') => {
-    // Optimistic local state update
+    // Optimistic UI update
     setGames((prev) => [newGame as BoardGame, ...prev]);
     setActiveTab(targetStatus === 'owned' ? 'collection' : 'wanted');
+
+    // Prepare payload matching the Supabase games table schema
+    const payload = {
+      id: newGame.id,
+      title: newGame.title,
+      year_published: newGame.year_published ?? null,
+      min_players: newGame.min_players ?? 1,
+      max_players: newGame.max_players ?? 4,
+      min_playtime: newGame.min_playtime ?? 30,
+      max_playtime: newGame.max_playtime ?? 60,
+      rating: newGame.rating ?? newGame.bgg_rating ?? null,
+      weight: newGame.weight ?? newGame.complexity_weight ?? null,
+      categories: newGame.categories ?? [],
+      mechanics: newGame.mechanics ?? [],
+      status: targetStatus,
+      language: targetStatus === 'owned' ? (newGame.language ?? 'EN') : null,
+    };
+
+    const { error } = await supabase.from('games').insert([payload]);
+
+    if (error) {
+      console.error('Error inserting game into Supabase:', error);
+      alert(`Could not save "${newGame.title}" to database: ${error.message}`);
+      // Revert optimistic update
+      setGames((prev) => prev.filter((g) => g.id !== newGame.id));
+    }
   };
 
   const handleMoveToCollection = async (gameId: string, language: string) => {
-    // Optimistic local update
+    const previousGames = [...games];
+
+    // Optimistic UI update
     setGames((prev) =>
       prev.map((g) => (g.id === gameId ? { ...g, status: 'owned', language } : g))
     );
     setActiveTab('collection');
+
+    // Persist to Supabase
+    const { error } = await supabase
+      .from('games')
+      .update({ status: 'owned', language })
+      .eq('id', gameId);
+
+    if (error) {
+      console.error('Error moving game to collection:', error);
+      alert(`Failed to move game: ${error.message}`);
+      // Revert on error
+      setGames(previousGames);
+    }
   };
 
   const handleRemoveFromWanted = async (gameId: string) => {
-    // Optimistic local update
+    const previousGames = [...games];
+
+    // Optimistic UI update
     setGames((prev) => prev.filter((g) => g.id !== gameId));
+
+    // Delete from Supabase
+    const { error } = await supabase
+      .from('games')
+      .delete()
+      .eq('id', gameId);
+
+    if (error) {
+      console.error('Error removing game from wanted:', error);
+      alert(`Failed to remove game: ${error.message}`);
+      // Revert on error
+      setGames(previousGames);
+    }
   };
 
   return (
