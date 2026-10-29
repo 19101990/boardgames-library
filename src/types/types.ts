@@ -27,6 +27,8 @@ export interface BoardGame {
   year_published?: number | null;
   image_url?: string | null;
   thumbnail_url?: string | null;
+  image?: string | null;
+  thumbnail?: string | null;
   min_players: number;
   max_players: number;
   min_playtime?: number | null;
@@ -34,6 +36,7 @@ export interface BoardGame {
 
   // Rating & Complexity (with optional aliases for BGG compatibility)
   rating?: number | null;
+  user_rating?: number | null;
   bgg_rating?: number | null;
   weight?: number | null;
   complexity_weight?: number | null;

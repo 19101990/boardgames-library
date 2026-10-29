@@ -146,7 +146,11 @@ export default function CollectionPage() {
     const payload = {
       id: newGame.id,
       title: newGame.title,
+      bgg_id: newGame.bgg_id ?? null,
       year_published: newGame.year_published ?? null,
+      image_url: newGame.image_url ?? null,
+      thumbnail_url: newGame.thumbnail_url ?? null,
+      description: newGame.description ?? null,
       min_players: newGame.min_players ?? 1,
       max_players: newGame.max_players ?? 4,
       min_playtime: newGame.min_playtime ?? 30,

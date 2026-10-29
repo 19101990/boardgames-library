@@ -15,6 +15,10 @@ export function AddGameForm({ onAddGame }: AddGameFormProps) {
   const [language, setLanguage] = useState<'EN' | 'DE' | 'PL' | 'Other'>('EN');
   const [isFetching, setIsFetching] = useState(false);
   const [fetchedMetadata, setFetchedMetadata] = useState<Partial<BoardGame> | null>(null);
+  const [searchResults, setSearchResults] = useState<
+    { bgg_id: number; title: string; year_published: number | null }[]
+  >([]);
+  const [bggError, setBggError] = useState<string | null>(null);
 
   const canFetch = title.trim().length > 0;
   const canSubmit = title.trim().length > 0;
@@ -22,19 +26,39 @@ export function AddGameForm({ onAddGame }: AddGameFormProps) {
   const handleFetchBgg = async () => {
     if (!canFetch) return;
     setIsFetching(true);
+    setBggError(null);
+    setFetchedMetadata(null);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 600));
+      const response = await fetch(`/api/bgg?q=${encodeURIComponent(title.trim())}`);
+      const body: {
+        results?: { bgg_id: number; title: string; year_published: number | null }[];
+        error?: string;
+      } = await response.json();
+      if (!response.ok) throw new Error(body.error ?? 'Could not search BoardGameGeek.');
+      const results = body.results ?? [];
+      setSearchResults(results);
+      if (results.length === 0) setBggError('No matching board games found.');
+    } catch (error) {
+      setBggError(error instanceof Error ? error.message : 'Could not search BoardGameGeek.');
+    } finally {
+      setIsFetching(false);
+    }
+  };
 
-      setFetchedMetadata({
-        min_players: 1,
-        max_players: 4,
-        min_playtime: 30,
-        max_playtime: 60,
-        bgg_rating: 7.5,
-        complexity_weight: 2.2,
-      });
-    } catch (err) {
-      console.error(err);
+  const handleSelectBggGame = async (bggId: number) => {
+    setIsFetching(true);
+    setBggError(null);
+    try {
+      const response = await fetch(`/api/bgg?id=${bggId}`);
+      const game: Partial<BoardGame> & { title?: string; error?: string } = await response.json();
+      if (!response.ok) throw new Error(game.error ?? 'Could not load game details.');
+      if (!game.title) throw new Error('BGG returned game details without a title.');
+      setFetchedMetadata(game);
+      setTitle(game.title);
+      setYearPublished(game.year_published ? String(game.year_published) : '');
+      setSearchResults([]);
+    } catch (error) {
+      setBggError(error instanceof Error ? error.message : 'Could not load game details.');
     } finally {
       setIsFetching(false);
     }
@@ -51,23 +75,27 @@ export function AddGameForm({ onAddGame }: AddGameFormProps) {
       .replace(/(^-|-$)/g, '');
 
     const newGame: Partial<BoardGame> & { language?: string } = {
-      id: slug || `game-${Date.now()}`,
+      id: fetchedMetadata?.bgg_id ? `bgg-${fetchedMetadata.bgg_id}` : slug || `game-${Date.now()}`,
+      bgg_id: fetchedMetadata?.bgg_id,
       title: title.trim(),
       year_published: yearPublished ? parseInt(yearPublished, 10) : undefined,
       status: targetStatus,
       language: targetStatus === 'owned' ? language : undefined,
       play_count: 0,
-      categories: ['Family'],
-      mechanics: ['Hand Management'],
+      image_url: fetchedMetadata?.image_url,
+      thumbnail_url: fetchedMetadata?.thumbnail_url,
+      description: fetchedMetadata?.description,
+      categories: fetchedMetadata?.categories ?? [],
+      mechanics: fetchedMetadata?.mechanics ?? [],
       min_players: fetchedMetadata?.min_players ?? 1,
       max_players: fetchedMetadata?.max_players ?? 4,
       min_playtime: fetchedMetadata?.min_playtime ?? 30,
       max_playtime: fetchedMetadata?.max_playtime ?? 60,
-      bgg_rating: fetchedMetadata?.bgg_rating ?? 7.0,
-      complexity_weight: fetchedMetadata?.complexity_weight ?? 1.5,
+      bgg_rating: fetchedMetadata?.bgg_rating,
+      complexity_weight: fetchedMetadata?.complexity_weight,
     };
 
-    onAddGame(newGame as BoardGame, targetStatus);
+    onAddGame(newGame, targetStatus);
   };
 
   return (
@@ -88,7 +116,12 @@ export function AddGameForm({ onAddGame }: AddGameFormProps) {
             type="text"
             required
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              setFetchedMetadata(null);
+              setSearchResults([]);
+              setBggError(null);
+            }}
             placeholder="e.g. Wingspan"
             className="w-full bg-transparent text-sm font-medium focus:outline-none placeholder-[var(--text-dim)]"
           />
@@ -131,6 +164,41 @@ export function AddGameForm({ onAddGame }: AddGameFormProps) {
         <CloudDownloadIcon size={16} />
         <span>{isFetching ? 'Fetching data...' : 'Fetch from BoardGameGeek'}</span>
       </button>
+      {searchResults.length > 0 && (
+        <div className="space-y-2" aria-live="polite">
+          <p className="text-xs font-semibold text-[var(--text-muted)]">
+            Choose the matching game:
+          </p>
+          <div className="max-h-52 overflow-y-auto rounded-2xl border border-[var(--border-surface-elevated)] divide-y divide-[var(--border-surface-elevated)]">
+            {searchResults.map((result) => (
+              <button
+                key={result.bgg_id}
+                type="button"
+                disabled={isFetching}
+                onClick={() => handleSelectBggGame(result.bgg_id)}
+                className="w-full px-4 py-3 text-left text-sm hover:bg-[var(--bg-surface-elevated)] disabled:opacity-50"
+              >
+                <span className="font-semibold">{result.title}</span>
+                {result.year_published && (
+                  <span className="ml-2 text-xs text-[var(--text-muted)]">
+                    {result.year_published}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {fetchedMetadata?.bgg_id && (
+        <p className="text-xs font-semibold text-[var(--text-muted)]" aria-live="polite">
+          BGG game selected (ID {fetchedMetadata.bgg_id}); details will be saved with your game.
+        </p>
+      )}
+      {bggError && (
+        <p className="text-xs font-semibold text-[#ff336d]" role="alert">
+          {bggError}
+        </p>
+      )}
 
       {/* Add to: Collection vs Wanted */}
       <div className="space-y-2.5">
