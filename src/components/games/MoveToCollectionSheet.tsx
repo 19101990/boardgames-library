@@ -10,6 +10,7 @@ interface MoveToCollectionSheetProps {
   onClose: () => void;
   onMoveToCollection: (gameId: string, language: string) => void;
   onRemoveFromWanted: (gameId: string) => void;
+  canManage: boolean;
 }
 
 export function MoveToCollectionSheet({
@@ -18,17 +19,20 @@ export function MoveToCollectionSheet({
   onClose,
   onMoveToCollection,
   onRemoveFromWanted,
+  canManage,
 }: MoveToCollectionSheetProps) {
   const [selectedLanguage, setSelectedLanguage] = useState<'EN' | 'DE' | 'PL' | 'Other'>('EN');
 
   if (!isOpen || !game) return null;
 
   const handleConfirmMove = () => {
+    if (!canManage) return;
     onMoveToCollection(game.id, selectedLanguage);
     onClose();
   };
 
   const handleConfirmRemove = () => {
+    if (!canManage) return;
     onRemoveFromWanted(game.id);
     onClose();
   };
@@ -71,51 +75,59 @@ export function MoveToCollectionSheet({
           </button>
         </div>
 
-        {/* Language selector */}
-        <div className="space-y-2">
-          <label style={{ color: 'var(--text-muted)' }} className="text-xs font-semibold block">
-            Language of your copy
-          </label>
-          <div className="flex gap-2">
-            {(['EN', 'DE', 'PL', 'Other'] as const).map((lang) => {
-              const isSelected = selectedLanguage === lang;
-              return (
-                <button
-                  key={lang}
-                  type="button"
-                  onClick={() => setSelectedLanguage(lang)}
-                  className={`flex-1 h-11 rounded-2xl text-xs font-bold transition-all border ${
-                    isSelected
-                      ? 'bg-[#0e8396] text-white border-transparent dark:bg-[#38e1ff] dark:text-black shadow-md'
-                      : 'bg-[var(--bg-surface-elevated)] border-[var(--border-surface-elevated)] text-[var(--text-muted)]'
-                  }`}
-                >
-                  {lang}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        {!canManage ? (
+          <p className="text-xs font-semibold text-[var(--text-muted)]">
+            Sign in to manage your collection.
+          </p>
+        ) : (
+          <>
+            {/* Language selector */}
+            <div className="space-y-2">
+              <label style={{ color: 'var(--text-muted)' }} className="text-xs font-semibold block">
+                Language of your copy
+              </label>
+              <div className="flex gap-2">
+                {(['EN', 'DE', 'PL', 'Other'] as const).map((lang) => {
+                  const isSelected = selectedLanguage === lang;
+                  return (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => setSelectedLanguage(lang)}
+                      className={`flex-1 h-11 rounded-2xl text-xs font-bold transition-all border ${
+                        isSelected
+                          ? 'bg-[#0e8396] text-white border-transparent dark:bg-[#38e1ff] dark:text-black shadow-md'
+                          : 'bg-[var(--bg-surface-elevated)] border-[var(--border-surface-elevated)] text-[var(--text-muted)]'
+                      }`}
+                    >
+                      {lang}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-        {/* Actions */}
-        <div className="space-y-2.5 pt-2">
-          <button
-            type="button"
-            onClick={handleConfirmMove}
-            className="w-full h-12 rounded-2xl bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black font-display font-black text-xs tracking-wider uppercase flex items-center justify-center gap-2 shadow-lg active:scale-[0.99] transition-transform"
-          >
-            <BookIcon size={16} />
-            <span>Add to Collection</span>
-          </button>
+            {/* Actions */}
+            <div className="space-y-2.5 pt-2">
+              <button
+                type="button"
+                onClick={handleConfirmMove}
+                className="w-full h-12 rounded-2xl bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black font-display font-black text-xs tracking-wider uppercase flex items-center justify-center gap-2 shadow-lg active:scale-[0.99] transition-transform"
+              >
+                <BookIcon size={16} />
+                <span>Add to Collection</span>
+              </button>
 
-          <button
-            type="button"
-            onClick={handleConfirmRemove}
-            className="w-full py-2.5 text-center text-xs font-bold text-[#ff336d] hover:underline"
-          >
-            Remove from Wanted
-          </button>
-        </div>
+              <button
+                type="button"
+                onClick={handleConfirmRemove}
+                className="w-full py-2.5 text-center text-xs font-bold text-[#ff336d] hover:underline"
+              >
+                Remove from Wanted
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
