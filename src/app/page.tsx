@@ -6,6 +6,8 @@ import { GameCard } from '@/components/games/GameCard';
 import { AddGameForm } from '@/components/games/AddGameForm';
 import { FilterSortSheet } from '@/components/games/FilterSortSheet';
 import { MoveToCollectionSheet } from '@/components/games/MoveToCollectionSheet';
+import { AuthControl } from '@/components/auth/AuthControl';
+import { useSupabaseAuth } from '@/lib/useSupabaseAuth';
 import { BoardGame } from '@/types/types';
 import {
   SunIcon,
@@ -20,6 +22,7 @@ import {
 } from '@/components/ui/Icons';
 
 export default function CollectionPage() {
+  const { user, isLoading: isAuthLoading, errorMessage: authError } = useSupabaseAuth();
   const [games, setGames] = useState<BoardGame[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -138,6 +141,11 @@ export default function CollectionPage() {
   const wantedCount = games.filter((g) => g.status === 'wishlist').length;
 
   const handleAddNewGame = async (newGame: Partial<BoardGame>, targetStatus: 'owned' | 'wishlist') => {
+    if (!user) {
+      alert('Please sign in before adding a game.');
+      return;
+    }
+
     // Optimistic UI update
     setGames((prev) => [newGame as BoardGame, ...prev]);
     setActiveTab(targetStatus === 'owned' ? 'collection' : 'wanted');
@@ -174,6 +182,11 @@ export default function CollectionPage() {
   };
 
   const handleMoveToCollection = async (gameId: string, language: string) => {
+    if (!user) {
+      alert('Please sign in before changing your collection.');
+      return;
+    }
+
     const previousGames = [...games];
 
     // Optimistic UI update
@@ -197,6 +210,11 @@ export default function CollectionPage() {
   };
 
   const handleRemoveFromWanted = async (gameId: string) => {
+    if (!user) {
+      alert('Please sign in before removing a game.');
+      return;
+    }
+
     const previousGames = [...games];
 
     // Optimistic UI update
@@ -231,18 +249,22 @@ export default function CollectionPage() {
                 <h1 className="font-display text-3xl font-black tracking-tight">
                   Add a game
                 </h1>
-                <button
-                  onClick={toggleTheme}
-                  aria-label="Toggle Theme"
-                  style={{
-                    backgroundColor: 'var(--bg-surface-elevated)',
-                    borderColor: 'var(--border-surface-elevated)',
-                    color: 'var(--text-primary)',
-                  }}
-                  className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform"
-                >
-                  {isDark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
-                </button>
+                <div className="flex items-center gap-2.5">
+                  <AuthControl user={user} isLoading={isAuthLoading} authError={authError} />
+                  <button
+                    type="button"
+                    aria-label="Toggle Theme"
+                    onClick={toggleTheme}
+                    style={{
+                      backgroundColor: 'var(--bg-surface-elevated)',
+                      borderColor: 'var(--border-surface-elevated)',
+                      color: 'var(--text-primary)',
+                    }}
+                    className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform"
+                  >
+                    {isDark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
@@ -257,6 +279,7 @@ export default function CollectionPage() {
 
                 {/* Header Action Buttons */}
                 <div className="flex items-center gap-2.5">
+                  <AuthControl user={user} isLoading={isAuthLoading} authError={authError} />
                   <button
                     onClick={toggleTheme}
                     aria-label="Toggle Theme"
@@ -334,7 +357,16 @@ export default function CollectionPage() {
         {/* Content Body */}
         <main className="px-5 pt-3 flex-1">
           {activeTab === 'add' ? (
-            <AddGameForm onAddGame={handleAddNewGame} />
+            user ? (
+              <AddGameForm onAddGame={handleAddNewGame} />
+            ) : (
+              <div className="py-16 text-center space-y-3">
+                <p className="text-sm font-bold">Sign in to add games.</p>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Use the account icon above to sign in.
+                </p>
+              </div>
+            )
           ) : isLoading ? (
             <div className="py-28 flex flex-col items-center justify-center gap-3 text-[var(--text-muted)]">
               <div className="w-7 h-7 border-2 border-current border-t-transparent rounded-full animate-spin text-[#0e8396] dark:text-[#38e1ff]" />
@@ -362,7 +394,7 @@ export default function CollectionPage() {
                   key={game.id}
                   game={game}
                   viewMode="grid"
-                  onCardClick={activeTab === 'wanted' ? (g) => setSelectedWantedGame(g) : undefined}
+                  onCardClick={activeTab === 'wanted' && user ? (g) => setSelectedWantedGame(g) : undefined}
                 />
               ))}
             </div>
@@ -373,7 +405,7 @@ export default function CollectionPage() {
                   key={game.id}
                   game={game}
                   viewMode="list"
-                  onCardClick={activeTab === 'wanted' ? (g) => setSelectedWantedGame(g) : undefined}
+                  onCardClick={activeTab === 'wanted' && user ? (g) => setSelectedWantedGame(g) : undefined}
                 />
               ))}
             </div>
@@ -415,11 +447,13 @@ export default function CollectionPage() {
 
             <button
               onClick={() => setActiveTab('add')}
+              disabled={!user || isAuthLoading}
+              title={!user ? 'Sign in to add games' : 'Add a game'}
               className={`flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all ${
                 activeTab === 'add'
                   ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg shadow-[#0e8396]/20 dark:shadow-[#38e1ff]/20'
                   : 'text-[#536482] dark:text-[#8ba2c4]'
-              }`}
+              } disabled:opacity-40 disabled:cursor-not-allowed`}
             >
               <PlusCircleIcon size={16} />
               <span>Add</span>
@@ -449,6 +483,7 @@ export default function CollectionPage() {
           onClose={() => setSelectedWantedGame(null)}
           onMoveToCollection={handleMoveToCollection}
           onRemoveFromWanted={handleRemoveFromWanted}
+          canManage={Boolean(user) && !isAuthLoading}
         />
       </div>
     </div>

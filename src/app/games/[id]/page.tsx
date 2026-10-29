@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
+import { useSupabaseAuth } from '@/lib/useSupabaseAuth';
+import { AuthControl } from '@/components/auth/AuthControl';
 import { BoardGame, Expansion, PlaySession } from '@/types/types';
 import {
   UsersIcon,
@@ -22,6 +24,7 @@ import {
 } from '@/components/ui/Icons';
 
 export default function GameDetailPage() {
+  const { user, isLoading: isAuthLoading, errorMessage: authError } = useSupabaseAuth();
   const params = useParams();
   const router = useRouter();
   const rawId = Array.isArray(params?.id) ? params.id[0] : params?.id;
@@ -99,7 +102,7 @@ export default function GameDetailPage() {
 
   // Insert a play record into Supabase
   const handleSavePlay = async () => {
-    if (!game) return;
+    if (!game || !user) return;
     setIsSavingPlay(true);
 
     const newPlay = {
@@ -128,6 +131,7 @@ export default function GameDetailPage() {
 
   // Toggle expansion ownership in Supabase
   const handleToggleExpansion = async (expansion: Expansion) => {
+    if (!user) return;
     const updatedStatus = !expansion.is_owned;
 
     // Optimistic UI update
@@ -142,6 +146,7 @@ export default function GameDetailPage() {
 
     if (error) {
       console.error('Error updating expansion:', error);
+      alert(`Could not update expansion: ${error.message}`);
       // Revert on error
       setExpansions((prev) =>
         prev.map((e) => (e.id === expansion.id ? { ...e, is_owned: expansion.is_owned } : e))
@@ -151,15 +156,19 @@ export default function GameDetailPage() {
 
   // Delete a play session
   const handleDeletePlay = async (playId: string) => {
+    if (!user) return;
     const { error } = await supabase.from('plays').delete().eq('id', playId);
     if (!error) {
       setPlays((prev) => prev.filter((p) => p.id !== playId));
+    } else {
+      console.error('Error deleting play:', error);
+      alert(`Could not delete play: ${error.message}`);
     }
   };
 
   // Remove game from library
   const handleRemoveGame = async () => {
-    if (!game) return;
+    if (!game || !user) return;
     const confirmed = window.confirm(`Remove "${game.title}" from your library?`);
     if (!confirmed) return;
 
@@ -244,8 +253,12 @@ export default function GameDetailPage() {
             <ArrowLeftIcon size={18} />
           </button>
 
+          <div className="absolute top-4 right-4 z-10">
+            <AuthControl user={user} isLoading={isAuthLoading} authError={authError} />
+          </div>
+
           {/* Rating Badge */}
-          <div className="absolute top-4 right-4 bg-[#ff336d] text-white px-3.5 py-1.5 rounded-2xl flex flex-col items-center shadow-lg">
+          <div className="absolute top-16 right-4 bg-[#ff336d] text-white px-3.5 py-1.5 rounded-2xl flex flex-col items-center shadow-lg">
             <span className="font-display text-2xl font-black leading-none">
               {ratingText}
             </span>
@@ -281,7 +294,7 @@ export default function GameDetailPage() {
           </div>
 
           {/* Action Button: Log Play (Only when owned) */}
-          {game.status === 'owned' && (
+          {game.status === 'owned' && user && (
             <button
               onClick={() => setIsLoggingPlay(true)}
               className="w-full h-12 rounded-2xl bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black font-display font-black text-sm flex items-center justify-center gap-2.5 shadow-lg active:scale-[0.98] transition-transform"
@@ -428,12 +441,14 @@ export default function GameDetailPage() {
                   expansions.map((exp) => (
                     <div
                       key={exp.id}
-                      onClick={() => handleToggleExpansion(exp)}
+                      onClick={user ? () => handleToggleExpansion(exp) : undefined}
                       style={{
                         backgroundColor: 'var(--bg-surface)',
                         borderColor: 'var(--border-surface)',
                       }}
-                      className="p-3 rounded-2xl border flex items-center justify-between cursor-pointer active:scale-[0.99] transition-transform"
+                      className={`p-3 rounded-2xl border flex items-center justify-between transition-transform ${
+                        user ? 'cursor-pointer active:scale-[0.99]' : ''
+                      }`}
                     >
                       <span className="text-xs font-semibold">{exp.title}</span>
                       <span
@@ -461,7 +476,7 @@ export default function GameDetailPage() {
                   {plays.length > 0 ? `${plays.length} logged` : 'Nothing logged'}
                 </p>
               </div>
-              {game.status === 'owned' && (
+              {game.status === 'owned' && user && (
                 <button
                   onClick={() => setIsLoggingPlay(true)}
                   style={{
@@ -477,7 +492,7 @@ export default function GameDetailPage() {
             </div>
 
             {/* In-Card Play Logging Form */}
-            {isLoggingPlay && (
+            {isLoggingPlay && user && (
               <div
                 style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-surface)' }}
                 className="p-4 rounded-2xl border space-y-3.5 shadow-md animate-in fade-in duration-150"
@@ -584,12 +599,14 @@ export default function GameDetailPage() {
                         </p>
                       )}
                     </div>
-                    <button
-                      onClick={() => handleDeletePlay(play.id)}
-                      className="text-[#ff336d] text-xs font-bold hover:underline px-2 py-1"
-                    >
-                      Delete
-                    </button>
+                    {user && (
+                      <button
+                        onClick={() => handleDeletePlay(play.id)}
+                        className="text-[#ff336d] text-xs font-bold hover:underline px-2 py-1"
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -598,12 +615,14 @@ export default function GameDetailPage() {
 
           {/* Footer Management Actions */}
           <div className="pt-2 space-y-3">
-            <button
-              onClick={handleRemoveGame}
-              className="w-full text-center text-xs font-bold text-[#ff336d] py-2 hover:underline"
-            >
-              Remove game
-            </button>
+            {user && (
+              <button
+                onClick={handleRemoveGame}
+                className="w-full text-center text-xs font-bold text-[#ff336d] py-2 hover:underline"
+              >
+                Remove game
+              </button>
+            )}
           </div>
         </div>
 
