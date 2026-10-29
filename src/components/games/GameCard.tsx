@@ -14,10 +14,12 @@ interface GameCardProps {
 
 export function GameCard({ game, viewMode, onCardClick }: GameCardProps) {
   const [imgError, setImgError] = useState(false);
-  const imageUrl = game.image || (game as unknown as { image?: string }).image;
+  const imageUrl = game.image_url ?? game.thumbnail_url ?? game.image ?? game.thumbnail;
   const initial = game.title.charAt(0).toUpperCase();
 
-  const ratingText = game.bgg_rating ?? game.bgg_rating ? (game.bgg_rating ?? game.bgg_rating)?.toFixed(1) : '—';
+  const rating = game.rating ?? game.bgg_rating;
+  const weight = game.weight ?? game.complexity_weight;
+  const ratingText = rating != null ? rating.toFixed(1) : '—';
   const language = (game as unknown as { language?: string }).language;
   const category = game.categories?.[0] || 'Family';
   const isWishlist = game.status === 'wishlist';
@@ -100,10 +102,10 @@ export function GameCard({ game, viewMode, onCardClick }: GameCardProps) {
                   </span>
                 </div>
               )}
-              {game.complexity_weight != null && (
+              {weight != null && (
                 <div className="flex items-center gap-2 text-[#0e8396] dark:text-[#38e1ff]">
                   <DumbbellIcon className="shrink-0" size={13} />
-                  <span>{game.complexity_weight.toFixed(1)} / 5</span>
+                  <span>{weight.toFixed(1)} / 5</span>
                 </div>
               )}
             </div>
