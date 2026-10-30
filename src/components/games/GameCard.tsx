@@ -20,6 +20,16 @@ export function GameCard({ game, viewMode, onCardClick }: GameCardProps) {
   const rating = game.rating ?? game.bgg_rating;
   const weight = game.weight ?? game.complexity_weight;
   const ratingText = rating != null ? rating.toFixed(1) : '—';
+  const ratingBadgeColor =
+    rating == null
+      ? 'bg-[#ff336d] text-white'
+      : rating >= 8
+        ? 'bg-green-800 text-white dark:bg-green-700 dark:text-white'
+        : rating >= 7
+          ? 'bg-green-500 text-white dark:bg-green-400 dark:text-green-950'
+          : rating >= 6
+            ? 'bg-amber-400 text-amber-950 dark:bg-amber-300 dark:text-amber-950'
+            : 'bg-rose-700 text-white dark:bg-rose-400 dark:text-rose-950';
   const language = (game as unknown as { language?: string }).language;
   const category = game.categories?.[0] || 'Family';
   const isWishlist = game.status === 'wishlist';
@@ -57,7 +67,7 @@ export function GameCard({ game, viewMode, onCardClick }: GameCardProps) {
             )}
 
             {/* Rating Badge */}
-            <div className="absolute top-2.5 left-2.5 bg-[#ff336d] text-white font-display text-xs font-bold px-2 py-0.5 rounded-lg shadow-md">
+            <div className={`absolute top-2.5 left-2.5 ${ratingBadgeColor} font-display text-xs font-bold px-2 py-0.5 rounded-lg shadow-md`}>
               {ratingText}
             </div>
 
@@ -137,7 +147,7 @@ export function GameCard({ game, viewMode, onCardClick }: GameCardProps) {
             )}
 
             {/* Rating Badge */}
-            <div className="absolute top-2.5 left-2.5 bg-[#ff336d] text-white font-display text-xs font-bold px-2 py-0.5 rounded-lg shadow-md">
+            <div className={`absolute top-2.5 left-2.5 ${ratingBadgeColor} font-display text-xs font-bold px-2 py-0.5 rounded-lg shadow-md`}>
               {ratingText}
             </div>
 
@@ -184,10 +194,10 @@ export function GameCard({ game, viewMode, onCardClick }: GameCardProps) {
                   </span>
                 </div>
               )}
-              {game.complexity_weight != null && (
+              {weight != null && (
                 <div className="flex items-center gap-1.5 text-[#0e8396] dark:text-[#38e1ff]">
                   <DumbbellIcon className="shrink-0" size={12} />
-                  <span>{game.complexity_weight.toFixed(1)} / 5</span>
+                  <span>{weight.toFixed(1)} / 5</span>
                 </div>
               )}
             </div>
