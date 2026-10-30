@@ -38,6 +38,22 @@
   --bg-nav: rgba(11, 15, 30, 0.92);
 }
 
+.dark .game-category-badge {
+  background-color: transparent;
+  border-color: #4d1f3d;
+  color: #ff9ab8;
+}
+
+.dark .game-mechanic-badge {
+  background-color: transparent;
+  border-color: #184657;
+  color: #8bdced;
+}
+
+.dark input[type="date"] {
+  color-scheme: dark;
+}
+
 html,
 body {
   background-color: var(--bg-app);
