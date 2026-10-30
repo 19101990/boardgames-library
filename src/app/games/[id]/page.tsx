@@ -40,6 +40,7 @@ export default function GameDetailPage() {
 
   // Play logging form state
   const [isLoggingPlay, setIsLoggingPlay] = useState(false);
+  const [editingPlayId, setEditingPlayId] = useState<string | null>(null);
   const [isSavingPlay, setIsSavingPlay] = useState(false);
   const [playDate, setPlayDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [playerCount, setPlayerCount] = useState(2);
@@ -100,33 +101,53 @@ export default function GameDetailPage() {
     fetchGameDetails();
   }, [fetchGameDetails]);
 
-  // Insert a play record into Supabase
+  // Insert or update a play record in Supabase
   const handleSavePlay = async () => {
     if (!game || !user) return;
     setIsSavingPlay(true);
 
-    const newPlay = {
+    const playChanges = {
       game_id: game.id,
       play_date: playDate,
       player_count: playerCount,
       notes: playNotes.trim() || null,
     };
 
-    const { data, error } = await supabase
-      .from('plays')
-      .insert([newPlay])
-      .select()
-      .single();
+    const result = editingPlayId
+      ? await supabase
+          .from('plays')
+          .update(playChanges)
+          .eq('id', editingPlayId)
+          .eq('game_id', game.id)
+          .select()
+          .single()
+      : await supabase.from('plays').insert([playChanges]).select().single();
 
-    if (error) {
-      console.error('Error saving play:', error);
-      alert('Could not save play session.');
-    } else if (data) {
-      setPlays((prev) => [data as PlaySession, ...prev]);
+    if (result.error) {
+      console.error('Error saving play:', result.error);
+      alert(`Could not ${editingPlayId ? 'update' : 'save'} play session: ${result.error.message}`);
+    } else if (result.data) {
+      const savedPlay = result.data as PlaySession;
+      setPlays((prev) =>
+        editingPlayId
+          ? prev
+              .map((play) => (play.id === savedPlay.id ? savedPlay : play))
+              .sort((a, b) => b.play_date.localeCompare(a.play_date))
+          : [savedPlay, ...prev]
+      );
       setIsLoggingPlay(false);
+      setEditingPlayId(null);
       setPlayNotes('');
     }
     setIsSavingPlay(false);
+  };
+
+  const handleEditPlay = (play: PlaySession) => {
+    setEditingPlayId(play.id);
+    setPlayDate(play.play_date);
+    setPlayerCount(play.player_count);
+    setPlayNotes(play.notes ?? '');
+    setIsLoggingPlay(true);
   };
 
   // Toggle expansion ownership in Supabase
@@ -272,7 +293,7 @@ export default function GameDetailPage() {
         <div className="p-5 space-y-6">
           {/* Status & Language Badges */}
           <div className="flex gap-2 text-xs font-semibold">
-            <span className="bg-[#d2eff4] text-[#0e8396] dark:bg-[#0e2730] dark:text-[#38e1ff] px-2.5 py-1 rounded-lg border border-[#a2d8e2] dark:border-[#173e4d]">
+            <span className="game-category-badge bg-[#d2eff4] text-[#0e8396] px-2.5 py-1 rounded-lg border border-[#a2d8e2]">
               {game.categories?.[0] || 'Base game'}
             </span>
             <span className="bg-[#e2e8f0] text-[#475569] dark:bg-[#12182c] dark:text-[#8ba2c4] px-2.5 py-1 rounded-lg border border-[#cbd5e1] dark:border-[#1f294a]">
@@ -296,7 +317,13 @@ export default function GameDetailPage() {
           {/* Action Button: Log Play (Only when owned) */}
           {game.status === 'owned' && user && (
             <button
-              onClick={() => setIsLoggingPlay(true)}
+              onClick={() => {
+                setEditingPlayId(null);
+                setPlayDate(new Date().toISOString().split('T')[0]);
+                setPlayerCount(game.min_players || 2);
+                setPlayNotes('');
+                setIsLoggingPlay(true);
+              }}
               className="w-full h-12 rounded-2xl bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black font-display font-black text-sm flex items-center justify-center gap-2.5 shadow-lg active:scale-[0.98] transition-transform"
             >
               <DiceIcon size={18} />
@@ -383,7 +410,7 @@ export default function GameDetailPage() {
                 {game.mechanics.map((m) => (
                   <span
                     key={m}
-                    className="bg-[#e2f4f7] text-[#0e8396] dark:bg-[#0f2933] dark:text-[#38e1ff] text-xs font-semibold px-3 py-1.5 rounded-xl border border-[#b2e3ec] dark:border-[#184657]"
+                    className="game-mechanic-badge bg-[#e2f4f7] text-[#0e8396] text-xs font-semibold px-3 py-1.5 rounded-xl border border-[#b2e3ec]"
                   >
                     {m}
                   </span>
@@ -400,7 +427,7 @@ export default function GameDetailPage() {
                 {game.categories.map((c) => (
                   <span
                     key={c}
-                    className="bg-[#fde8ef] text-[#d91c5c] dark:bg-[#2a1122] dark:text-[#ff3388] text-xs font-semibold px-3 py-1.5 rounded-xl border border-[#f5b8cc] dark:border-[#4d1f3d]"
+                    className="game-category-badge bg-[#fde8ef] text-[#d91c5c] text-xs font-semibold px-3 py-1.5 rounded-xl border border-[#f5b8cc]"
                   >
                     {c}
                   </span>
@@ -555,7 +582,10 @@ export default function GameDetailPage() {
 
                 <div className="flex gap-2 pt-1">
                   <button
-                    onClick={() => setIsLoggingPlay(false)}
+                    onClick={() => {
+                      setIsLoggingPlay(false);
+                      setEditingPlayId(null);
+                    }}
                     style={{
                       backgroundColor: 'var(--bg-surface-elevated)',
                       borderColor: 'var(--border-surface-elevated)',
@@ -569,7 +599,7 @@ export default function GameDetailPage() {
                     disabled={isSavingPlay}
                     className="flex-1 py-2.5 rounded-xl bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black text-xs font-bold shadow-md active:scale-95 transition-transform disabled:opacity-50"
                   >
-                    {isSavingPlay ? 'Saving...' : 'Save play'}
+                    {isSavingPlay ? 'Saving...' : editingPlayId ? 'Save changes' : 'Save play'}
                   </button>
                 </div>
               </div>
@@ -600,12 +630,20 @@ export default function GameDetailPage() {
                       )}
                     </div>
                     {user && (
-                      <button
-                        onClick={() => handleDeletePlay(play.id)}
-                        className="text-[#ff336d] text-xs font-bold hover:underline px-2 py-1"
-                      >
-                        Delete
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleEditPlay(play)}
+                          className="text-[#0e8396] dark:text-[#38e1ff] text-xs font-bold hover:underline px-2 py-1"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeletePlay(play.id)}
+                          className="text-[#ff336d] text-xs font-bold hover:underline px-2 py-1"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
