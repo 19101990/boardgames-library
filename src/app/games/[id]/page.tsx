@@ -20,8 +20,6 @@ import {
   PlusIcon,
   MinusIcon,
   BookIcon,
-  HeartIcon,
-  PlusCircleIcon,
 } from '@/components/ui/Icons';
 
 export default function GameDetailPage() {
@@ -262,7 +260,7 @@ export default function GameDetailPage() {
 
   return (
     <div style={{ backgroundColor: 'var(--bg-app)', color: 'var(--text-primary)' }} className="min-h-screen">
-      <div className="max-w-md mx-auto min-h-screen flex flex-col pb-28 relative">
+      <div className="max-w-md mx-auto min-h-screen flex flex-col pb-10 relative">
         
         {/* Top Hero Poster */}
         <div
@@ -726,35 +724,6 @@ export default function GameDetailPage() {
           </div>
         </div>
 
-        {/* Floating Bottom Navigation */}
-        <nav className="fixed bottom-5 left-0 right-0 z-40 max-w-sm mx-auto px-4">
-          <div
-            style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-surface)' }}
-            className="backdrop-blur-xl border p-1.5 rounded-2xl flex items-center justify-between shadow-2xl"
-          >
-            <Link
-              href="/"
-              className="flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg"
-            >
-              <BookIcon size={16} />
-              <span>Collection</span>
-            </Link>
-            <Link
-              href="/?tab=wanted"
-              className="flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold text-[#536482] dark:text-[#8ba2c4] hover:text-white"
-            >
-              <HeartIcon size={16} />
-              <span>Wanted</span>
-            </Link>
-            <Link
-              href="/?tab=add"
-              className="flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold text-[#536482] dark:text-[#8ba2c4] hover:text-white"
-            >
-              <PlusCircleIcon size={16} />
-              <span>Add</span>
-            </Link>
-          </div>
-        </nav>
       </div>
       <MoveToCollectionSheet
         game={game?.status === 'wishlist' ? game : null}
