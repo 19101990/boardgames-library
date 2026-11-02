@@ -7,6 +7,8 @@ import { AddGameForm } from '@/components/games/AddGameForm';
 import { FilterSortSheet } from '@/components/games/FilterSortSheet';
 import { AuthControl } from '@/components/auth/AuthControl';
 import { useSupabaseAuth } from '@/lib/useSupabaseAuth';
+import { cacheGame, cacheGames, getCachedGames, isNetworkError } from '@/lib/offlineGameStore';
+import { useOnlineStatus } from '@/lib/useOnlineStatus';
 import { BoardGame } from '@/types/types';
 import {
   SunIcon,
@@ -22,6 +24,7 @@ import {
 
 export default function CollectionPage() {
   const { user, isLoading: isAuthLoading, errorMessage: authError } = useSupabaseAuth();
+  const { isOnline, setIsOnline } = useOnlineStatus();
   const [games, setGames] = useState<BoardGame[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -36,24 +39,77 @@ export default function CollectionPage() {
     setIsLoading(true);
     setErrorMessage(null);
 
-    const { data, error } = await supabase
-      .from('games')
-      .select('*')
-      .order('title', { ascending: true });
-
-    if (error) {
-      console.error('Error fetching games from Supabase:', error);
-      setErrorMessage(error.message);
-    } else if (data) {
-      setGames(data as BoardGame[]);
+    if (!navigator.onLine) {
+      setIsOnline(false);
+      try {
+        const cachedGames = await getCachedGames();
+        setGames(cachedGames);
+        if (cachedGames.length === 0) {
+          setErrorMessage('No saved library is available offline yet. Connect to load it.');
+        }
+      } catch (error) {
+        console.error('Could not load the saved library:', error);
+        setErrorMessage('Could not read the saved library on this device.');
+      }
+      setIsLoading(false);
+      return;
     }
 
-    setIsLoading(false);
-  }, []);
+    try {
+      const { data, error } = await supabase
+        .from('games')
+        .select('*')
+        .order('title', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching games from Supabase:', error);
+        if (isNetworkError(error)) {
+          setIsOnline(false);
+          const cachedGames = await getCachedGames();
+          setGames(cachedGames);
+          setErrorMessage(
+            cachedGames.length === 0
+              ? 'No saved library is available offline yet. Connect to load it.'
+              : null
+          );
+        } else {
+          setErrorMessage(error.message);
+        }
+      } else if (data) {
+        const fetchedGames = data as BoardGame[];
+        setGames(fetchedGames);
+        setIsOnline(true);
+        void cacheGames(fetchedGames).catch((cacheError: unknown) => {
+          console.error('Could not save the library for offline use:', cacheError);
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch games:', error);
+      if (isNetworkError(error)) {
+        setIsOnline(false);
+        try {
+          const cachedGames = await getCachedGames();
+          setGames(cachedGames);
+          setErrorMessage(
+            cachedGames.length === 0
+              ? 'No saved library is available offline yet. Connect to load it.'
+              : null
+          );
+        } catch (cacheError) {
+          console.error('Could not load the saved library:', cacheError);
+          setErrorMessage('Could not read the saved library on this device.');
+        }
+      } else {
+        setErrorMessage('Could not load the library. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [setIsOnline]);
 
   useEffect(() => {
     fetchGames();
-  }, [fetchGames]);
+  }, [fetchGames, isOnline]);
 
   // Sync theme state on mount
   useEffect(() => {
@@ -137,6 +193,10 @@ export default function CollectionPage() {
   const wantedCount = games.filter((g) => g.status === 'wishlist').length;
 
   const handleAddNewGame = async (newGame: Partial<BoardGame>, targetStatus: 'owned' | 'wishlist') => {
+    if (!isOnline || !navigator.onLine) {
+      alert('Connect to the internet before changing your library.');
+      return;
+    }
     if (!user) {
       alert('Please sign in before adding a game.');
       return;
@@ -174,6 +234,10 @@ export default function CollectionPage() {
       alert(`Could not save "${newGame.title}" to database: ${error.message}`);
       // Revert optimistic update
       setGames((prev) => prev.filter((g) => g.id !== newGame.id));
+    } else {
+      void cacheGame(payload as BoardGame).catch((cacheError: unknown) => {
+        console.error('Could not save the new game for offline use:', cacheError);
+      });
     }
   };
 
@@ -299,8 +363,20 @@ export default function CollectionPage() {
 
         {/* Content Body */}
         <main className="px-5 pt-3 flex-1">
+          {!isOnline && activeTab !== 'add' && (
+            <p className="mb-3 rounded-xl border border-[var(--border-surface)] bg-[var(--bg-surface)] px-3 py-2 text-xs text-[var(--text-muted)]">
+              Offline — showing the saved library. Changes are unavailable.
+            </p>
+          )}
           {activeTab === 'add' ? (
-            user ? (
+            !isOnline ? (
+              <div className="py-16 text-center space-y-3">
+                <p className="text-sm font-bold">You’re offline.</p>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Connect to the internet to add games.
+                </p>
+              </div>
+            ) : user ? (
               <AddGameForm onAddGame={handleAddNewGame} />
             ) : (
               <div className="py-16 text-center space-y-3">
@@ -388,8 +464,8 @@ export default function CollectionPage() {
 
             <button
               onClick={() => setActiveTab('add')}
-              disabled={!user || isAuthLoading}
-              title={!user ? 'Sign in to add games' : 'Add a game'}
+              disabled={!user || isAuthLoading || !isOnline}
+              title={!isOnline ? 'Connect to add games' : !user ? 'Sign in to add games' : 'Add a game'}
               className={`flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all ${
                 activeTab === 'add'
                   ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg shadow-[#0e8396]/20 dark:shadow-[#38e1ff]/20'

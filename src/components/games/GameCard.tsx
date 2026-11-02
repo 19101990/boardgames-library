@@ -225,6 +225,12 @@ export function GameCard({ game, viewMode, onCardClick }: GameCardProps) {
   return (
     <Link
       href={`/games/${game.id}`}
+      onClick={(event) => {
+        if (!navigator.onLine) {
+          event.preventDefault();
+          window.location.assign(new URL(`/games/${game.id}`, window.location.origin).href);
+        }
+      }}
       style={cardStyle}
       className="rounded-2xl border overflow-hidden active:scale-[0.98] transition-all shadow-md shadow-black/5 dark:shadow-black/40"
     >
