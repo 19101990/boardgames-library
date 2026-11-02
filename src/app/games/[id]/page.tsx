@@ -8,6 +8,13 @@ import { supabase } from '@/lib/supabase';
 import { useSupabaseAuth } from '@/lib/useSupabaseAuth';
 import { AuthControl } from '@/components/auth/AuthControl';
 import { MoveToCollectionSheet } from '@/components/games/MoveToCollectionSheet';
+import {
+  cacheGameDetails,
+  getCachedGameDetails,
+  isNetworkError,
+  removeCachedGame,
+} from '@/lib/offlineGameStore';
+import { useOnlineStatus } from '@/lib/useOnlineStatus';
 import { BoardGame, Expansion, PlaySession } from '@/types/types';
 import {
   UsersIcon,
@@ -24,6 +31,7 @@ import {
 
 export default function GameDetailPage() {
   const { user, isLoading: isAuthLoading, errorMessage: authError } = useSupabaseAuth();
+  const { isOnline, setIsOnline } = useOnlineStatus();
   const params = useParams();
   const router = useRouter();
   const rawId = Array.isArray(params?.id) ? params.id[0] : params?.id;
@@ -34,6 +42,8 @@ export default function GameDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [imgError, setImgError] = useState(false);
   const [isMoveToCollectionOpen, setIsMoveToCollectionOpen] = useState(false);
+  const [hasCachedDetailLists, setHasCachedDetailLists] = useState(false);
+  const [offlineCacheMiss, setOfflineCacheMiss] = useState(false);
 
   // Expansions section accordion state
   const [isExpansionsOpen, setIsExpansionsOpen] = useState(false);
@@ -50,8 +60,34 @@ export default function GameDetailPage() {
   const fetchGameDetails = useCallback(async () => {
     if (!rawId) return;
     setIsLoading(true);
+    setOfflineCacheMiss(false);
+
+    const loadCachedDetails = async () => {
+      try {
+        const cached = await getCachedGameDetails(rawId);
+        setGame(cached.game);
+        setExpansions(cached.expansions);
+        setPlays(cached.plays);
+        setHasCachedDetailLists(cached.hasCachedDetails);
+        setOfflineCacheMiss(!cached.game);
+        if (cached.game) setPlayerCount(cached.game.min_players || 2);
+      } catch (error) {
+        console.error('Could not load saved game details:', error);
+        setGame(null);
+        setExpansions([]);
+        setPlays([]);
+        setHasCachedDetailLists(false);
+        setOfflineCacheMiss(true);
+      }
+    };
 
     try {
+      if (!navigator.onLine) {
+        setIsOnline(false);
+        await loadCachedDetails();
+        return;
+      }
+
       // 1. Fetch Game
       const { data: gameData, error: gameError } = await supabase
         .from('games')
@@ -61,49 +97,75 @@ export default function GameDetailPage() {
 
       if (gameError || !gameData) {
         console.error('Error fetching game:', gameError);
-        setGame(null);
-        setIsLoading(false);
+        if (isNetworkError(gameError)) {
+          setIsOnline(false);
+          await loadCachedDetails();
+        } else {
+          setGame(null);
+          setExpansions([]);
+          setPlays([]);
+          setHasCachedDetailLists(false);
+        }
         return;
       }
 
       setGame(gameData as BoardGame);
+      setIsOnline(true);
       setPlayerCount(gameData.min_players || 2);
 
-      // 2. Fetch Expansions
-      const { data: expansionsData } = await supabase
-        .from('expansions')
-        .select('*')
-        .eq('game_id', rawId)
-        .order('title', { ascending: true });
+      const [expansionsResult, playsResult] = await Promise.all([
+        supabase
+          .from('expansions')
+          .select('*')
+          .eq('game_id', rawId)
+          .order('title', { ascending: true }),
+        supabase
+          .from('plays')
+          .select('*')
+          .eq('game_id', rawId)
+          .order('play_date', { ascending: false }),
+      ]);
 
-      if (expansionsData) {
-        setExpansions(expansionsData as Expansion[]);
+      if (expansionsResult.error || playsResult.error) {
+        const requestError = expansionsResult.error ?? playsResult.error;
+        console.error('Could not fetch game history:', requestError);
+
+        if (isNetworkError(requestError)) {
+          setIsOnline(false);
+          await loadCachedDetails();
+          setGame(gameData as BoardGame);
+          return;
+        }
       }
 
-      // 3. Fetch Plays
-      const { data: playsData } = await supabase
-        .from('plays')
-        .select('*')
-        .eq('game_id', rawId)
-        .order('play_date', { ascending: false });
-
-      if (playsData) {
-        setPlays(playsData as PlaySession[]);
+      const expansions = (expansionsResult.data ?? []) as Expansion[];
+      const plays = (playsResult.data ?? []) as PlaySession[];
+      setExpansions(expansions);
+      setPlays(plays);
+      setHasCachedDetailLists(!expansionsResult.error && !playsResult.error);
+      if (!expansionsResult.error && !playsResult.error) {
+        void cacheGameDetails(gameData as BoardGame, expansions, plays).catch((cacheError: unknown) => {
+          console.error('Could not save game details for offline use:', cacheError);
+        });
       }
     } catch (err) {
       console.error('Failed to load game details:', err);
+      if (isNetworkError(err)) {
+        setIsOnline(false);
+        await loadCachedDetails();
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [rawId]);
+  }, [rawId, setIsOnline]);
 
   useEffect(() => {
     fetchGameDetails();
-  }, [fetchGameDetails]);
+  }, [fetchGameDetails, isOnline]);
 
   // Insert or update a play record in Supabase
   const handleSavePlay = async () => {
-    if (!game || !user) return;
+    if (!game || !user || !isOnline || !navigator.onLine) return;
     setIsSavingPlay(true);
 
     const playChanges = {
@@ -128,13 +190,15 @@ export default function GameDetailPage() {
       alert(`Could not ${editingPlayId ? 'update' : 'save'} play session: ${result.error.message}`);
     } else if (result.data) {
       const savedPlay = result.data as PlaySession;
-      setPlays((prev) =>
-        editingPlayId
-          ? prev
-              .map((play) => (play.id === savedPlay.id ? savedPlay : play))
-              .sort((a, b) => b.play_date.localeCompare(a.play_date))
-          : [savedPlay, ...prev]
-      );
+      const updatedPlays = editingPlayId
+        ? plays
+            .map((play) => (play.id === savedPlay.id ? savedPlay : play))
+            .sort((a, b) => b.play_date.localeCompare(a.play_date))
+        : [savedPlay, ...plays];
+      setPlays(updatedPlays);
+      void cacheGameDetails(game, expansions, updatedPlays, hasCachedDetailLists).catch((cacheError: unknown) => {
+        console.error('Could not update saved game history:', cacheError);
+      });
       setIsLoggingPlay(false);
       setEditingPlayId(null);
       setPlayNotes('');
@@ -152,13 +216,14 @@ export default function GameDetailPage() {
 
   // Toggle expansion ownership in Supabase
   const handleToggleExpansion = async (expansion: Expansion) => {
-    if (!user) return;
+    if (!game || !user || !isOnline || !navigator.onLine) return;
     const updatedStatus = !expansion.is_owned;
+    const updatedExpansions = expansions.map((item) =>
+      item.id === expansion.id ? { ...item, is_owned: updatedStatus } : item
+    );
 
     // Optimistic UI update
-    setExpansions((prev) =>
-      prev.map((e) => (e.id === expansion.id ? { ...e, is_owned: updatedStatus } : e))
-    );
+    setExpansions(updatedExpansions);
 
     const { error } = await supabase
       .from('expansions')
@@ -172,15 +237,23 @@ export default function GameDetailPage() {
       setExpansions((prev) =>
         prev.map((e) => (e.id === expansion.id ? { ...e, is_owned: expansion.is_owned } : e))
       );
+    } else {
+      void cacheGameDetails(game, updatedExpansions, plays, hasCachedDetailLists).catch((cacheError: unknown) => {
+        console.error('Could not update saved expansion details:', cacheError);
+      });
     }
   };
 
   // Delete a play session
   const handleDeletePlay = async (playId: string) => {
-    if (!user) return;
+    if (!game || !user || !isOnline || !navigator.onLine) return;
     const { error } = await supabase.from('plays').delete().eq('id', playId);
     if (!error) {
-      setPlays((prev) => prev.filter((p) => p.id !== playId));
+      const updatedPlays = plays.filter((play) => play.id !== playId);
+      setPlays(updatedPlays);
+      void cacheGameDetails(game, expansions, updatedPlays, hasCachedDetailLists).catch((cacheError: unknown) => {
+        console.error('Could not update saved game history:', cacheError);
+      });
     } else {
       console.error('Error deleting play:', error);
       alert(`Could not delete play: ${error.message}`);
@@ -189,7 +262,7 @@ export default function GameDetailPage() {
 
   // Remove game from library
   const handleRemoveGame = async () => {
-    if (!game || !user) return;
+    if (!game || !user || !isOnline || !navigator.onLine) return;
     const confirmed = window.confirm(
       game.status === 'wishlist'
         ? `Remove "${game.title}" from your wanted list?`
@@ -199,6 +272,9 @@ export default function GameDetailPage() {
 
     const { error } = await supabase.from('games').delete().eq('id', game.id);
     if (!error) {
+      void removeCachedGame(game.id).catch((cacheError: unknown) => {
+        console.error('Could not remove the deleted game from offline storage:', cacheError);
+      });
       router.push('/');
     } else {
       console.error('Error deleting game:', error);
@@ -207,7 +283,7 @@ export default function GameDetailPage() {
   };
 
   const handleMoveToCollection = async (gameId: string, language: string) => {
-    if (!game || !user) return;
+    if (!game || !user || !isOnline || !navigator.onLine) return;
 
     const { error } = await supabase
       .from('games')
@@ -220,7 +296,11 @@ export default function GameDetailPage() {
       return;
     }
 
-    setGame({ ...game, status: 'owned', language });
+    const updatedGame = { ...game, status: 'owned' as const, language };
+    setGame(updatedGame);
+    void cacheGameDetails(updatedGame, expansions, plays, hasCachedDetailLists).catch((cacheError: unknown) => {
+      console.error('Could not update saved game status:', cacheError);
+    });
   };
 
   const getWeightLabel = (w?: number | null) => {
@@ -242,7 +322,11 @@ export default function GameDetailPage() {
   if (!game) {
     return (
       <div style={{ backgroundColor: 'var(--bg-app)', color: 'var(--text-primary)' }} className="min-h-screen p-6 text-center flex flex-col items-center justify-center gap-4">
-        <p className="text-sm font-semibold">Game not found.</p>
+        <p className="text-sm font-semibold">
+          {offlineCacheMiss
+            ? 'This game has not been saved for offline viewing. Open it while online first.'
+            : 'Game not found.'}
+        </p>
         <Link
           href="/"
           className="px-4 py-2 rounded-xl text-xs font-bold bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black"
@@ -312,6 +396,12 @@ export default function GameDetailPage() {
 
         {/* Content Body */}
         <div className="p-5 space-y-6">
+          {!isOnline && (
+            <p className="rounded-xl border border-[var(--border-surface)] bg-[var(--bg-surface)] px-3 py-2 text-xs text-[var(--text-muted)]">
+              Offline — showing saved game information. It may be out of date; changes are unavailable.
+            </p>
+          )}
+
           {/* Status & Language Badges */}
           <div className="flex gap-2 text-xs font-semibold">
             <span className="game-category-badge bg-[#d2eff4] text-[#0e8396] px-2.5 py-1 rounded-lg border border-[#a2d8e2]">
@@ -338,6 +428,7 @@ export default function GameDetailPage() {
           {/* Action Button: Log Play (Only when owned) */}
           {game.status === 'owned' && user && (
             <button
+              disabled={!isOnline}
               onClick={() => {
                 setEditingPlayId(null);
                 setPlayDate(new Date().toISOString().split('T')[0]);
@@ -345,7 +436,7 @@ export default function GameDetailPage() {
                 setPlayNotes('');
                 setIsLoggingPlay(true);
               }}
-              className="w-full h-12 rounded-2xl bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black font-display font-black text-sm flex items-center justify-center gap-2.5 shadow-lg active:scale-[0.98] transition-transform"
+              className="w-full h-12 rounded-2xl bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black font-display font-black text-sm flex items-center justify-center gap-2.5 shadow-lg active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <DiceIcon size={18} />
               <span>Log a play</span>
@@ -466,7 +557,9 @@ export default function GameDetailPage() {
               <div>
                 <h3 className="font-display text-base font-bold">Expansions</h3>
                 <p className="text-xs text-[#536482] dark:text-[#6e82a3] mt-0.5">
-                  {expansions.length > 0
+                  {!isOnline && !hasCachedDetailLists
+                    ? 'Expansion information not saved offline'
+                    : expansions.length > 0
                     ? `${ownedExpansionsCount} of ${expansions.length} owned`
                     : 'None listed'}
                 </p>
@@ -483,19 +576,21 @@ export default function GameDetailPage() {
               <div className="mt-3 space-y-2 pt-2 animate-in fade-in duration-150">
                 {expansions.length === 0 ? (
                   <p className="text-xs italic text-[var(--text-muted)] py-2">
-                    No expansions cataloged for this title yet.
+                    {!isOnline && !hasCachedDetailLists
+                      ? 'Open this game online to save its expansion information.'
+                      : 'No expansions cataloged for this title yet.'}
                   </p>
                 ) : (
                   expansions.map((exp) => (
                     <div
                       key={exp.id}
-                      onClick={user ? () => handleToggleExpansion(exp) : undefined}
+                      onClick={user && isOnline ? () => handleToggleExpansion(exp) : undefined}
                       style={{
                         backgroundColor: 'var(--bg-surface)',
                         borderColor: 'var(--border-surface)',
                       }}
                       className={`p-3 rounded-2xl border flex items-center justify-between transition-transform ${
-                        user ? 'cursor-pointer active:scale-[0.99]' : ''
+                        user && isOnline ? 'cursor-pointer active:scale-[0.99]' : ''
                       }`}
                     >
                       <span className="text-xs font-semibold">{exp.title}</span>
@@ -522,17 +617,22 @@ export default function GameDetailPage() {
               <div>
                 <h3 className="font-display text-base font-bold">Plays</h3>
                 <p className="text-xs text-[#536482] dark:text-[#6e82a3] mt-0.5">
-                  {plays.length > 0 ? `${plays.length} logged` : 'Nothing logged'}
+                  {!isOnline && !hasCachedDetailLists
+                    ? 'Play history not saved offline'
+                    : plays.length > 0
+                      ? `${plays.length} logged`
+                      : 'Nothing logged'}
                 </p>
               </div>
               {game.status === 'owned' && user && (
                 <button
+                  disabled={!isOnline}
                   onClick={() => setIsLoggingPlay(true)}
                   style={{
                     backgroundColor: 'var(--bg-surface-elevated)',
                     borderColor: 'var(--border-surface-elevated)',
                   }}
-                  className="h-8 px-3.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-transform"
+                  className="h-8 px-3.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <PlusIcon size={13} />
                   <span>Log</span>
@@ -552,6 +652,7 @@ export default function GameDetailPage() {
                   </label>
                   <input
                     type="date"
+                    disabled={!isOnline}
                     value={playDate}
                     onChange={(e) => setPlayDate(e.target.value)}
                     style={{
@@ -568,17 +669,19 @@ export default function GameDetailPage() {
                   </label>
                   <div className="flex items-center gap-3">
                     <button
+                      disabled={!isOnline}
                       onClick={() => setPlayerCount(Math.max(1, playerCount - 1))}
                       style={{ backgroundColor: 'var(--bg-surface-elevated)' }}
-                      className="w-8 h-8 rounded-xl flex items-center justify-center font-bold active:scale-95"
+                      className="w-8 h-8 rounded-xl flex items-center justify-center font-bold active:scale-95 disabled:opacity-40"
                     >
                       <MinusIcon size={14} />
                     </button>
                     <span className="font-display text-lg font-bold">{playerCount}</span>
                     <button
+                      disabled={!isOnline}
                       onClick={() => setPlayerCount(playerCount + 1)}
                       style={{ backgroundColor: 'var(--bg-surface-elevated)' }}
-                      className="w-8 h-8 rounded-xl flex items-center justify-center font-bold active:scale-95"
+                      className="w-8 h-8 rounded-xl flex items-center justify-center font-bold active:scale-95 disabled:opacity-40"
                     >
                       <PlusIcon size={14} />
                     </button>
@@ -591,6 +694,7 @@ export default function GameDetailPage() {
                   </label>
                   <textarea
                     rows={2}
+                    disabled={!isOnline}
                     placeholder="Who won, scores, house rules..."
                     value={playNotes}
                     onChange={(e) => setPlayNotes(e.target.value)}
@@ -618,7 +722,7 @@ export default function GameDetailPage() {
                   </button>
                   <button
                     onClick={handleSavePlay}
-                    disabled={isSavingPlay}
+                    disabled={isSavingPlay || !isOnline}
                     className="flex-1 py-2.5 rounded-xl bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black text-xs font-bold shadow-md active:scale-95 transition-transform disabled:opacity-50"
                   >
                     {isSavingPlay ? 'Saving...' : editingPlayId ? 'Save changes' : 'Save play'}
@@ -629,7 +733,11 @@ export default function GameDetailPage() {
 
             {/* List of Previous Play Sessions */}
             {plays.length === 0 && !isLoggingPlay ? (
-              <p className="text-xs italic text-[#8b9bb5] dark:text-[#55698a]">No plays logged yet.</p>
+              <p className="text-xs italic text-[#8b9bb5] dark:text-[#55698a]">
+                {!isOnline && !hasCachedDetailLists
+                  ? 'Open this game online to save its play history.'
+                  : 'No plays logged yet.'}
+              </p>
             ) : (
               <div className="space-y-2">
                 {plays.map((play) => (
@@ -651,7 +759,7 @@ export default function GameDetailPage() {
                         </p>
                       )}
                     </div>
-                    {user && (
+                    {user && isOnline && (
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleEditPlay(play)}
@@ -693,7 +801,7 @@ export default function GameDetailPage() {
                 <button
                   type="button"
                   onClick={() => setIsMoveToCollectionOpen(true)}
-                  disabled={!user || isAuthLoading}
+                  disabled={!user || isAuthLoading || !isOnline}
                   className="w-full h-11 rounded-xl bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black font-bold text-xs flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <BookIcon size={15} />
@@ -702,7 +810,7 @@ export default function GameDetailPage() {
                 <button
                   type="button"
                   onClick={handleRemoveGame}
-                  disabled={!user || isAuthLoading}
+                  disabled={!user || isAuthLoading || !isOnline}
                   className="w-full py-2 text-center text-xs font-bold text-[#ff336d] hover:underline disabled:opacity-50 disabled:no-underline"
                 >
                   Remove from Wanted
@@ -716,7 +824,8 @@ export default function GameDetailPage() {
             ) : user && (
               <button
                 onClick={handleRemoveGame}
-                className="w-full text-center text-xs font-bold text-[#ff336d] py-2 hover:underline"
+                disabled={!isOnline}
+              className="w-full text-center text-xs font-bold text-[#ff336d] py-2 hover:underline disabled:opacity-50 disabled:no-underline"
               >
                 Remove game
               </button>
@@ -732,6 +841,7 @@ export default function GameDetailPage() {
         onMoveToCollection={handleMoveToCollection}
         onRemoveFromWanted={handleRemoveGame}
         canManage={Boolean(user) && !isAuthLoading}
+        isOnline={isOnline}
         showRemoveFromWanted={false}
       />
     </div>

@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#070913">
+    <title>Saved game — Board Game Shelf</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, sans-serif;
+        background: #070913;
+        color: #f3f6ff;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        background: #070913;
+      }
+
+      main {
+        width: min(100%, 520px);
+        min-height: 100vh;
+        margin: 0 auto;
+        padding: 18px 20px 40px;
+      }
+
+      a {
+        color: #38e1ff;
+        font-size: 0.85rem;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .hero {
+        position: relative;
+        display: grid;
+        min-height: 220px;
+        margin: 16px -20px 20px;
+        overflow: hidden;
+        place-items: center;
+        background: #10172b;
+      }
+
+      .hero img {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0.88;
+      }
+
+      .hero span {
+        color: #28334f;
+        font-size: 8rem;
+        font-weight: 800;
+      }
+
+      .status,
+      .offline {
+        display: inline-block;
+        margin: 0 6px 12px 0;
+        padding: 6px 10px;
+        border: 1px solid #26314f;
+        border-radius: 10px;
+        color: #9eb4d8;
+        font-size: 0.75rem;
+        font-weight: 700;
+      }
+
+      .offline {
+        display: block;
+        margin: 0 0 18px;
+        color: #c1cde3;
+        line-height: 1.5;
+      }
+
+      h1 {
+        margin: 8px 0;
+        font-size: clamp(1.8rem, 8vw, 2.5rem);
+        line-height: 1.1;
+      }
+
+      .muted,
+      .empty {
+        color: #8ba2c4;
+        font-size: 0.85rem;
+        line-height: 1.55;
+      }
+
+      section {
+        margin-top: 24px;
+        padding-top: 18px;
+        border-top: 1px solid #1d2644;
+      }
+
+      h2 {
+        margin: 0 0 10px;
+        font-size: 1.05rem;
+      }
+
+      ul {
+        display: grid;
+        gap: 8px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      li {
+        padding: 11px 12px;
+        border: 1px solid #1d2644;
+        border-radius: 12px;
+        background: #0f1426;
+        font-size: 0.85rem;
+        line-height: 1.5;
+      }
+
+      #loading {
+        padding: 80px 0;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <a href="/">← Back to library</a>
+      <div id="loading" class="muted">Opening saved game…</div>
+      <article id="game" hidden>
+        <div class="offline">Offline read-only view. Saved information may be out of date.</div>
+        <div class="hero"><img id="image" alt=""><span id="initial"></span></div>
+        <div id="badges"></div>
+        <h1 id="title"></h1>
+        <p id="metadata" class="muted"></p>
+        <section id="description-section">
+          <h2>About</h2>
+          <p id="description" class="muted"></p>
+        </section>
+        <section>
+          <h2>Game information</h2>
+          <ul id="stats"></ul>
+        </section>
+        <section id="mechanics-section">
+          <h2>Mechanics</h2>
+          <p id="mechanics" class="muted"></p>
+        </section>
+        <section id="categories-section">
+          <h2>Categories</h2>
+          <p id="categories" class="muted"></p>
+        </section>
+        <section>
+          <h2>Expansions</h2>
+          <p id="expansions-status" class="muted"></p>
+          <ul id="expansions"></ul>
+        </section>
+        <section>
+          <h2>Plays</h2>
+          <p id="plays-status" class="muted"></p>
+          <ul id="plays"></ul>
+        </section>
+      </article>
+    </main>
+    <script src="/offline-game.js" defer></script>
+  </body>
+</html>

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<defs>
+<radialGradient id="bg" cx="50%" cy="48%" r="70%"><stop offset="0" stop-color="#0d1330"/><stop offset="1" stop-color="#070913"/></radialGradient>
+<filter id="g1" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="14"/></filter>
+<filter id="g3" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="26"/></filter>
+<filter id="g2" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="4"/></filter>
+</defs>
+<rect width="512" height="512" fill="url(#bg)"/>
+<g fill="none" stroke-linejoin="miter" stroke-linecap="butt" stroke-width="30">
+ <g stroke="#0a6a7a" opacity="1" filter="url(#g3)"><g stroke-width="44"><g transform="translate(129.0,181.0)"><path d="M0,0 H72.0 L100,24.0 V55.5 L78.0,75.0 L100,94.5 V126.0 L72.0,150 H0 Z M0,75.0 H78.0"/><path transform="translate(154,0)" d="M100,25.500000000000004 L74.5,0 H25.500000000000004 L0,25.500000000000004 V124.5 L25.500000000000004,150 H74.5 L100,124.5 V75.0 H50.0"/></g></g><g stroke-width="17"></g></g>
+ <g stroke="#0a6a7a" opacity="1" filter="url(#g1)"><g transform="translate(129.0,181.0)"><path d="M0,0 H72.0 L100,24.0 V55.5 L78.0,75.0 L100,94.5 V126.0 L72.0,150 H0 Z M0,75.0 H78.0"/><path transform="translate(154,0)" d="M100,25.500000000000004 L74.5,0 H25.500000000000004 L0,25.500000000000004 V124.5 L25.500000000000004,150 H74.5 L100,124.5 V75.0 H50.0"/></g><g stroke-width="11"></g></g>
+ <g stroke="#0a6c7d" opacity="1" filter="url(#g2)"><g transform="translate(129.0,181.0)"><path d="M0,0 H72.0 L100,24.0 V55.5 L78.0,75.0 L100,94.5 V126.0 L72.0,150 H0 Z M0,75.0 H78.0"/><path transform="translate(154,0)" d="M100,25.500000000000004 L74.5,0 H25.500000000000004 L0,25.500000000000004 V124.5 L25.500000000000004,150 H74.5 L100,124.5 V75.0 H50.0"/></g><g stroke-width="7"></g></g>
+ <g stroke="#0e8396"><g transform="translate(129.0,181.0)"><path d="M0,0 H72.0 L100,24.0 V55.5 L78.0,75.0 L100,94.5 V126.0 L72.0,150 H0 Z M0,75.0 H78.0"/><path transform="translate(154,0)" d="M100,25.500000000000004 L74.5,0 H25.500000000000004 L0,25.500000000000004 V124.5 L25.500000000000004,150 H74.5 L100,124.5 V75.0 H50.0"/></g></g>
+</g></svg>

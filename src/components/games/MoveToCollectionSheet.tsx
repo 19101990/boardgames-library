@@ -11,6 +11,7 @@ interface MoveToCollectionSheetProps {
   onMoveToCollection: (gameId: string, language: string) => void;
   onRemoveFromWanted: (gameId: string) => void;
   canManage: boolean;
+  isOnline?: boolean;
   showRemoveFromWanted?: boolean;
 }
 
@@ -21,6 +22,7 @@ export function MoveToCollectionSheet({
   onMoveToCollection,
   onRemoveFromWanted,
   canManage,
+  isOnline = true,
   showRemoveFromWanted = true,
 }: MoveToCollectionSheetProps) {
   const [selectedLanguage, setSelectedLanguage] = useState<'EN' | 'DE' | 'PL' | 'Other'>('EN');
@@ -28,13 +30,13 @@ export function MoveToCollectionSheet({
   if (!isOpen || !game) return null;
 
   const handleConfirmMove = () => {
-    if (!canManage) return;
+    if (!canManage || !isOnline) return;
     onMoveToCollection(game.id, selectedLanguage);
     onClose();
   };
 
   const handleConfirmRemove = () => {
-    if (!canManage) return;
+    if (!canManage || !isOnline) return;
     onRemoveFromWanted(game.id);
     onClose();
   };
@@ -77,9 +79,11 @@ export function MoveToCollectionSheet({
           </button>
         </div>
 
-        {!canManage ? (
+        {!canManage || !isOnline ? (
           <p className="text-xs font-semibold text-[var(--text-muted)]">
-            Sign in to manage your collection.
+            {!canManage
+              ? 'Sign in to manage your collection.'
+              : 'Connect to the internet to change your collection.'}
           </p>
         ) : (
           <>

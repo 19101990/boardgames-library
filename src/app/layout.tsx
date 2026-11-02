@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Chakra_Petch, Inter } from 'next/font/google';
 import Script from 'next/script';
+import { PwaRegister } from '@/components/PwaRegister';
 import './globals.css';
 
 const chakraPetch = Chakra_Petch({
@@ -20,6 +21,14 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'Collection — Board Game Shelf',
   description: 'Mobile board game collection and play tracker',
+  icons: {
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon-16.png', sizes: '16x16', type: 'image/png' },
+    ],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
 };
 
 export default function RootLayout({
@@ -48,6 +57,7 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans antialiased">
+        <PwaRegister />
         {children}
       </body>
     </html>
