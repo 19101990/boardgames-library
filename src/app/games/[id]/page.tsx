@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import { useSupabaseAuth } from '@/lib/useSupabaseAuth';
 import { AuthControl } from '@/components/auth/AuthControl';
+import { MoveToCollectionSheet } from '@/components/games/MoveToCollectionSheet';
 import { BoardGame, Expansion, PlaySession } from '@/types/types';
 import {
   UsersIcon,
@@ -34,6 +35,7 @@ export default function GameDetailPage() {
   const [plays, setPlays] = useState<PlaySession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [imgError, setImgError] = useState(false);
+  const [isMoveToCollectionOpen, setIsMoveToCollectionOpen] = useState(false);
 
   // Expansions section accordion state
   const [isExpansionsOpen, setIsExpansionsOpen] = useState(false);
@@ -190,7 +192,11 @@ export default function GameDetailPage() {
   // Remove game from library
   const handleRemoveGame = async () => {
     if (!game || !user) return;
-    const confirmed = window.confirm(`Remove "${game.title}" from your library?`);
+    const confirmed = window.confirm(
+      game.status === 'wishlist'
+        ? `Remove "${game.title}" from your wanted list?`
+        : `Remove "${game.title}" from your library?`
+    );
     if (!confirmed) return;
 
     const { error } = await supabase.from('games').delete().eq('id', game.id);
@@ -200,6 +206,23 @@ export default function GameDetailPage() {
       console.error('Error deleting game:', error);
       alert('Could not remove game.');
     }
+  };
+
+  const handleMoveToCollection = async (gameId: string, language: string) => {
+    if (!game || !user) return;
+
+    const { error } = await supabase
+      .from('games')
+      .update({ status: 'owned', language })
+      .eq('id', gameId);
+
+    if (error) {
+      console.error('Error moving game to collection:', error);
+      alert(`Could not add game to collection: ${error.message}`);
+      return;
+    }
+
+    setGame({ ...game, status: 'owned', language });
   };
 
   const getWeightLabel = (w?: number | null) => {
@@ -495,7 +518,8 @@ export default function GameDetailPage() {
           </div>
 
           {/* Plays Section */}
-          <div className="border-t border-[var(--border-surface)] pt-4 space-y-3">
+          {game.status === 'owned' && (
+            <div className="border-t border-[var(--border-surface)] pt-4 space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="font-display text-base font-bold">Plays</h3>
@@ -649,11 +673,49 @@ export default function GameDetailPage() {
                 ))}
               </div>
             )}
-          </div>
+            </div>
+          )}
 
           {/* Footer Management Actions */}
           <div className="pt-2 space-y-3">
-            {user && (
+            {game.status === 'wishlist' ? (
+              <div
+                style={{
+                  backgroundColor: 'var(--bg-surface)',
+                  borderColor: 'var(--border-surface)',
+                }}
+                className="p-4 rounded-2xl border space-y-3"
+              >
+                <div>
+                  <h3 className="font-display text-base font-bold">Wanted</h3>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                    Add this game to your collection or remove it from your wanted list.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMoveToCollectionOpen(true)}
+                  disabled={!user || isAuthLoading}
+                  className="w-full h-11 rounded-xl bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black font-bold text-xs flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <BookIcon size={15} />
+                  <span>Add to Collection</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRemoveGame}
+                  disabled={!user || isAuthLoading}
+                  className="w-full py-2 text-center text-xs font-bold text-[#ff336d] hover:underline disabled:opacity-50 disabled:no-underline"
+                >
+                  Remove from Wanted
+                </button>
+                {!user && (
+                  <p className="text-center text-[11px] text-[var(--text-muted)]">
+                    Sign in to manage your wanted list.
+                  </p>
+                )}
+              </div>
+            ) : user && (
               <button
                 onClick={handleRemoveGame}
                 className="w-full text-center text-xs font-bold text-[#ff336d] py-2 hover:underline"
@@ -694,6 +756,15 @@ export default function GameDetailPage() {
           </div>
         </nav>
       </div>
+      <MoveToCollectionSheet
+        game={game?.status === 'wishlist' ? game : null}
+        isOpen={isMoveToCollectionOpen}
+        onClose={() => setIsMoveToCollectionOpen(false)}
+        onMoveToCollection={handleMoveToCollection}
+        onRemoveFromWanted={handleRemoveGame}
+        canManage={Boolean(user) && !isAuthLoading}
+        showRemoveFromWanted={false}
+      />
     </div>
   );
 }

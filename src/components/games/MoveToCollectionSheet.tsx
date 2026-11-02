@@ -11,6 +11,7 @@ interface MoveToCollectionSheetProps {
   onMoveToCollection: (gameId: string, language: string) => void;
   onRemoveFromWanted: (gameId: string) => void;
   canManage: boolean;
+  showRemoveFromWanted?: boolean;
 }
 
 export function MoveToCollectionSheet({
@@ -20,6 +21,7 @@ export function MoveToCollectionSheet({
   onMoveToCollection,
   onRemoveFromWanted,
   canManage,
+  showRemoveFromWanted = true,
 }: MoveToCollectionSheetProps) {
   const [selectedLanguage, setSelectedLanguage] = useState<'EN' | 'DE' | 'PL' | 'Other'>('EN');
 
@@ -118,13 +120,15 @@ export function MoveToCollectionSheet({
                 <span>Add to Collection</span>
               </button>
 
-              <button
-                type="button"
-                onClick={handleConfirmRemove}
-                className="w-full py-2.5 text-center text-xs font-bold text-[#ff336d] hover:underline"
-              >
-                Remove from Wanted
-              </button>
+              {showRemoveFromWanted && (
+                <button
+                  type="button"
+                  onClick={handleConfirmRemove}
+                  className="w-full py-2.5 text-center text-xs font-bold text-[#ff336d] hover:underline"
+                >
+                  Remove from Wanted
+                </button>
+              )}
             </div>
           </>
         )}

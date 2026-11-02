@@ -5,7 +5,6 @@ import { supabase } from '@/lib/supabase';
 import { GameCard } from '@/components/games/GameCard';
 import { AddGameForm } from '@/components/games/AddGameForm';
 import { FilterSortSheet } from '@/components/games/FilterSortSheet';
-import { MoveToCollectionSheet } from '@/components/games/MoveToCollectionSheet';
 import { AuthControl } from '@/components/auth/AuthControl';
 import { useSupabaseAuth } from '@/lib/useSupabaseAuth';
 import { BoardGame } from '@/types/types';
@@ -31,9 +30,6 @@ export default function CollectionPage() {
   const [search, setSearch] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isDark, setIsDark] = useState(true);
-
-  // Wanted modal state
-  const [selectedWantedGame, setSelectedWantedGame] = useState<BoardGame | null>(null);
 
   // Fetch games from Supabase
   const fetchGames = useCallback(async () => {
@@ -178,59 +174,6 @@ export default function CollectionPage() {
       alert(`Could not save "${newGame.title}" to database: ${error.message}`);
       // Revert optimistic update
       setGames((prev) => prev.filter((g) => g.id !== newGame.id));
-    }
-  };
-
-  const handleMoveToCollection = async (gameId: string, language: string) => {
-    if (!user) {
-      alert('Please sign in before changing your collection.');
-      return;
-    }
-
-    const previousGames = [...games];
-
-    // Optimistic UI update
-    setGames((prev) =>
-      prev.map((g) => (g.id === gameId ? { ...g, status: 'owned', language } : g))
-    );
-    setActiveTab('collection');
-
-    // Persist to Supabase
-    const { error } = await supabase
-      .from('games')
-      .update({ status: 'owned', language })
-      .eq('id', gameId);
-
-    if (error) {
-      console.error('Error moving game to collection:', error);
-      alert(`Failed to move game: ${error.message}`);
-      // Revert on error
-      setGames(previousGames);
-    }
-  };
-
-  const handleRemoveFromWanted = async (gameId: string) => {
-    if (!user) {
-      alert('Please sign in before removing a game.');
-      return;
-    }
-
-    const previousGames = [...games];
-
-    // Optimistic UI update
-    setGames((prev) => prev.filter((g) => g.id !== gameId));
-
-    // Delete from Supabase
-    const { error } = await supabase
-      .from('games')
-      .delete()
-      .eq('id', gameId);
-
-    if (error) {
-      console.error('Error removing game from wanted:', error);
-      alert(`Failed to remove game: ${error.message}`);
-      // Revert on error
-      setGames(previousGames);
     }
   };
 
@@ -394,7 +337,6 @@ export default function CollectionPage() {
                   key={game.id}
                   game={game}
                   viewMode="grid"
-                  onCardClick={activeTab === 'wanted' && user ? (g) => setSelectedWantedGame(g) : undefined}
                 />
               ))}
             </div>
@@ -405,7 +347,6 @@ export default function CollectionPage() {
                   key={game.id}
                   game={game}
                   viewMode="list"
-                  onCardClick={activeTab === 'wanted' && user ? (g) => setSelectedWantedGame(g) : undefined}
                 />
               ))}
             </div>
@@ -476,15 +417,6 @@ export default function CollectionPage() {
           isDark={isDark}
         />
 
-        {/* Move from Wanted to Collection Sheet Modal */}
-        <MoveToCollectionSheet
-          game={selectedWantedGame}
-          isOpen={!!selectedWantedGame}
-          onClose={() => setSelectedWantedGame(null)}
-          onMoveToCollection={handleMoveToCollection}
-          onRemoveFromWanted={handleRemoveFromWanted}
-          canManage={Boolean(user) && !isAuthLoading}
-        />
       </div>
     </div>
   );
