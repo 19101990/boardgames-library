@@ -20,16 +20,8 @@ export function GameCard({ game, viewMode, onCardClick }: GameCardProps) {
   const rating = game.rating ?? game.bgg_rating;
   const weight = game.weight ?? game.complexity_weight;
   const ratingText = rating != null ? rating.toFixed(1) : '—';
-  const ratingBadgeColor =
-    rating == null
-      ? 'bg-[#ff336d] text-white'
-      : rating >= 8
-        ? 'bg-green-800 text-white dark:bg-green-700 dark:text-white'
-        : rating >= 7
-          ? 'bg-green-500 text-white dark:bg-green-400 dark:text-green-950'
-          : rating >= 6
-            ? 'bg-amber-400 text-amber-950 dark:bg-amber-300 dark:text-amber-950'
-            : 'bg-rose-700 text-white dark:bg-rose-400 dark:text-rose-950';
+  const badgeColor =
+    'border border-[#a2d8e2] bg-[#d2eff4] text-[#0e8396] dark:border-[#1f294a] dark:bg-[#12182c] dark:text-[#8ba2c4]';
   const language = (game as unknown as { language?: string }).language;
   const category = game.categories?.[0] || 'Family';
   const isWishlist = game.status === 'wishlist';
@@ -67,13 +59,13 @@ export function GameCard({ game, viewMode, onCardClick }: GameCardProps) {
             )}
 
             {/* Rating Badge */}
-            <div className={`absolute top-2.5 left-2.5 ${ratingBadgeColor} font-display text-xs font-bold px-2 py-0.5 rounded-lg shadow-md`}>
+            <div className="absolute left-2 top-2 rounded-md bg-[#ff336d] px-2.5 py-1 text-center font-display text-sm font-black leading-tight text-white shadow-md">
               {ratingText}
             </div>
 
             {/* Language Badge - Only shown when owned and language is specified */}
             {!isWishlist && language && (
-              <div className="absolute bottom-2.5 right-2.5 bg-black/75 dark:bg-black/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded border border-white/10 uppercase">
+              <div className={`absolute bottom-2.5 right-2.5 ${badgeColor} px-1.5 py-0.5 rounded-lg text-[10px] font-semibold uppercase`}>
                 {language}
               </div>
             )}
@@ -147,13 +139,13 @@ export function GameCard({ game, viewMode, onCardClick }: GameCardProps) {
             )}
 
             {/* Rating Badge */}
-            <div className={`absolute top-2.5 left-2.5 ${ratingBadgeColor} font-display text-xs font-bold px-2 py-0.5 rounded-lg shadow-md`}>
+            <div className="absolute left-2.5 top-2.5 rounded-md bg-[#ff336d] px-3 py-1.5 text-center font-display text-lg font-black leading-tight text-white shadow-md">
               {ratingText}
             </div>
 
             {/* Language Badge - Only shown when owned and language is specified */}
             {!isWishlist && language && (
-              <div className="absolute bottom-2.5 right-2.5 bg-black/75 dark:bg-black/90 text-white text-[10px] font-bold px-1.5 py-0.5 rounded border border-white/10 uppercase">
+              <div className={`absolute bottom-2.5 right-2.5 ${badgeColor} px-2 py-1 rounded-lg text-xs font-semibold uppercase`}>
                 {language}
               </div>
             )}
