@@ -98,8 +98,57 @@ export function AddGameForm({ onAddGame }: AddGameFormProps) {
     onAddGame(newGame, targetStatus);
   };
 
+  const bggResults = (
+    <div className="space-y-3" aria-live="polite">
+      {searchResults.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-[var(--text-muted)]">
+            Choose the matching game:
+          </p>
+          <div className="max-h-80 overflow-y-auto rounded-2xl border border-[var(--border-surface-elevated)] divide-y divide-[var(--border-surface-elevated)]">
+            {searchResults.map((result) => (
+              <button
+                key={result.bgg_id}
+                type="button"
+                disabled={isFetching}
+                onClick={() => handleSelectBggGame(result.bgg_id)}
+                className="w-full px-4 py-3 text-left text-sm hover:bg-[var(--bg-surface-elevated)] disabled:opacity-50"
+              >
+                <span className="font-semibold">{result.title}</span>
+                {result.year_published && (
+                  <span className="ml-2 text-xs text-[var(--text-muted)]">
+                    {result.year_published}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {fetchedMetadata?.bgg_id && (
+        <p className="text-xs font-semibold text-[var(--text-muted)]">
+          BGG game selected (ID {fetchedMetadata.bgg_id}); details will be saved with your game.
+        </p>
+      )}
+      {bggError && (
+        <p className="text-xs font-semibold text-[#ff336d]" role="alert">
+          {bggError}
+        </p>
+      )}
+      {searchResults.length === 0 && !fetchedMetadata?.bgg_id && !bggError && (
+        <p className="text-xs text-[var(--text-muted)]">
+          Search BoardGameGeek to see matching games here.
+        </p>
+      )}
+    </div>
+  );
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 pt-1">
+    <form
+      onSubmit={handleSubmit}
+      className="grid grid-cols-1 gap-8 pt-1 lg:grid-cols-[minmax(0,450px)_minmax(0,1fr)] lg:gap-10 lg:items-start"
+    >
+      <div className="space-y-6">
       {/* Title */}
       <div className="space-y-2">
         <label className="text-xs font-semibold text-[var(--text-muted)] block">
@@ -164,41 +213,7 @@ export function AddGameForm({ onAddGame }: AddGameFormProps) {
         <CloudDownloadIcon size={16} />
         <span>{isFetching ? 'Fetching data...' : 'Fetch from BoardGameGeek'}</span>
       </button>
-      {searchResults.length > 0 && (
-        <div className="space-y-2" aria-live="polite">
-          <p className="text-xs font-semibold text-[var(--text-muted)]">
-            Choose the matching game:
-          </p>
-          <div className="max-h-52 overflow-y-auto rounded-2xl border border-[var(--border-surface-elevated)] divide-y divide-[var(--border-surface-elevated)]">
-            {searchResults.map((result) => (
-              <button
-                key={result.bgg_id}
-                type="button"
-                disabled={isFetching}
-                onClick={() => handleSelectBggGame(result.bgg_id)}
-                className="w-full px-4 py-3 text-left text-sm hover:bg-[var(--bg-surface-elevated)] disabled:opacity-50"
-              >
-                <span className="font-semibold">{result.title}</span>
-                {result.year_published && (
-                  <span className="ml-2 text-xs text-[var(--text-muted)]">
-                    {result.year_published}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      {fetchedMetadata?.bgg_id && (
-        <p className="text-xs font-semibold text-[var(--text-muted)]" aria-live="polite">
-          BGG game selected (ID {fetchedMetadata.bgg_id}); details will be saved with your game.
-        </p>
-      )}
-      {bggError && (
-        <p className="text-xs font-semibold text-[#ff336d]" role="alert">
-          {bggError}
-        </p>
-      )}
+      <div className="lg:hidden">{bggResults}</div>
 
       {/* Add to: Collection vs Wanted */}
       <div className="space-y-2.5">
@@ -276,6 +291,11 @@ export function AddGameForm({ onAddGame }: AddGameFormProps) {
           {targetStatus === 'owned' ? 'Add to Collection' : 'Add to Wanted'}
         </button>
       </div>
+      </div>
+      <aside className="hidden p-5 lg:block">
+        <h2 className="mb-4 font-display text-base font-bold">BoardGameGeek results</h2>
+        {bggResults}
+      </aside>
     </form>
   );
 }
