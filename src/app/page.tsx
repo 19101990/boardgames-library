@@ -241,14 +241,70 @@ export default function CollectionPage() {
     }
   };
 
+  const renderNavigation = (isDesktop: boolean) => (
+    <nav
+      aria-label="Main navigation"
+      className={isDesktop ? 'shrink-0' : 'fixed bottom-5 left-0 right-0 z-40 max-w-sm mx-auto px-4 md:hidden'}
+    >
+      <div
+        style={{
+          backgroundColor: 'var(--bg-surface)',
+          borderColor: 'var(--border-surface)',
+        }}
+        className="backdrop-blur-xl border p-1.5 rounded-2xl flex items-center justify-between shadow-2xl"
+      >
+        <button
+          type="button"
+          onClick={() => setActiveTab('collection')}
+          className={`${isDesktop ? '' : 'flex-1'} py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all ${
+            activeTab === 'collection'
+              ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg shadow-[#0e8396]/20 dark:shadow-[#38e1ff]/20'
+              : 'text-[#536482] dark:text-[#8ba2c4]'
+          }`}
+        >
+          <BookIcon size={16} />
+          <span>Collection</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('wanted')}
+          className={`${isDesktop ? '' : 'flex-1'} py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all ${
+            activeTab === 'wanted'
+              ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg shadow-[#0e8396]/20 dark:shadow-[#38e1ff]/20'
+              : 'text-[#536482] dark:text-[#8ba2c4]'
+          }`}
+        >
+          <HeartIcon size={16} />
+          <span>Wanted</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('add')}
+          disabled={!user || isAuthLoading || !isOnline}
+          title={!isOnline ? 'Connect to add games' : !user ? 'Sign in to add games' : 'Add a game'}
+          className={`${isDesktop ? '' : 'flex-1'} py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all ${
+            activeTab === 'add'
+              ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg shadow-[#0e8396]/20 dark:shadow-[#38e1ff]/20'
+              : 'text-[#536482] dark:text-[#8ba2c4]'
+          } disabled:opacity-40 disabled:cursor-not-allowed`}
+        >
+          <PlusCircleIcon size={16} />
+          <span>Add</span>
+        </button>
+      </div>
+    </nav>
+  );
+
   return (
     <div style={{ backgroundColor: 'var(--bg-app)', color: 'var(--text-primary)' }} className="min-h-screen">
-      <div className="max-w-md mx-auto min-h-screen flex flex-col pb-28 relative">
+      <div className="max-w-md mx-auto min-h-screen flex flex-col pb-28 relative md:max-w-[1600px] md:pb-10">
         
         {/* Top Header */}
-        <header className="px-5 pt-7 pb-3">
+        <header className="px-5 pt-7 pb-3 md:px-8 md:pt-8 md:pb-5">
           {activeTab === 'add' ? (
-            <div>
+            <div className="md:hidden">
               <p className="text-xs font-semibold italic text-[#0e8396] dark:text-[#38e1ff] tracking-wide">
                 Three quick steps
               </p>
@@ -275,7 +331,7 @@ export default function CollectionPage() {
               </div>
             </div>
           ) : (
-            <div>
+            <div className="md:hidden">
               <p className="text-xs font-semibold italic text-[#0e8396] dark:text-[#38e1ff] tracking-wide">
                 {activeTab === 'wanted' ? `${wantedCount} games wanted` : `${ownedCount} games owned`}
               </p>
@@ -352,17 +408,118 @@ export default function CollectionPage() {
                     borderColor: 'var(--border-surface-elevated)',
                     color: 'var(--text-primary)',
                   }}
-                  className="w-12 h-12 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform shrink-0"
+                  className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform shrink-0"
                 >
                   <SlidersIcon size={18} />
                 </button>
               </div>
             </div>
           )}
+
+          <div className="hidden flex-col gap-4 md:flex">
+            <div className="flex items-center justify-between gap-6">
+              <div className="min-w-[190px] shrink-0">
+                <p className="text-xs font-semibold italic text-[#0e8396] dark:text-[#38e1ff] tracking-wide">
+                  {activeTab === 'add'
+                    ? 'Three quick steps'
+                    : activeTab === 'wanted'
+                      ? `${wantedCount} games wanted`
+                      : `${ownedCount} games owned`}
+                </p>
+                <h1 className="mt-1 font-display text-3xl font-black tracking-tight">
+                  {activeTab === 'add' ? 'Add a game' : activeTab === 'wanted' ? 'Wanted' : 'Collection'}
+                </h1>
+              </div>
+              {renderNavigation(true)}
+            </div>
+
+            <div className="flex items-center justify-between gap-4">
+              {activeTab !== 'add' ? (
+                <div className="flex min-w-0 max-w-[640px] flex-1 items-center gap-2.5">
+                  <div
+                    style={{
+                      backgroundColor: 'var(--bg-surface-elevated)',
+                      borderColor: 'var(--border-surface-elevated)',
+                    }}
+                    className="flex h-12 min-w-0 flex-1 items-center rounded-2xl border px-3.5"
+                  >
+                    <SearchIcon size={16} className="text-[#536482] dark:text-[#62779c] mr-2.5 shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Title, mechanic, theme"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      style={{ color: 'var(--text-primary)' }}
+                      className="w-full bg-transparent text-sm placeholder-[#536482] dark:placeholder-[#62779c] focus:outline-none font-medium"
+                    />
+                    {search && (
+                      <button
+                        type="button"
+                        aria-label="Clear search"
+                        onClick={() => setSearch('')}
+                        className="text-xs text-[#536482] dark:text-[#62779c] px-1"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsFilterOpen(true)}
+                    aria-label="Open Filter and Sort Sheet"
+                    style={{
+                      backgroundColor: 'var(--bg-surface-elevated)',
+                      borderColor: 'var(--border-surface-elevated)',
+                      color: 'var(--text-primary)',
+                    }}
+                    className="w-10 h-10 shrink-0 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform"
+                  >
+                    <SlidersIcon size={18} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex-1" />
+              )}
+
+              <div className="flex shrink-0 items-center gap-2.5">
+                <AuthControl user={user} isLoading={isAuthLoading} authError={authError} />
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  aria-label="Toggle Theme"
+                  title="Toggle Theme"
+                  style={{
+                    backgroundColor: 'var(--bg-surface-elevated)',
+                    borderColor: 'var(--border-surface-elevated)',
+                    color: 'var(--text-primary)',
+                  }}
+                  className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform"
+                >
+                  {isDark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
+                </button>
+                {activeTab !== 'add' && (
+                  <button
+                    type="button"
+                    onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                    aria-label="Toggle View Mode"
+                    title="Toggle View Mode"
+                    style={{
+                      backgroundColor: 'var(--bg-surface-elevated)',
+                      borderColor: 'var(--border-surface-elevated)',
+                      color: 'var(--text-primary)',
+                    }}
+                    className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform text-sm"
+                  >
+                    {viewMode === 'grid' ? <ListIcon size={18} /> : <GridIcon size={18} />}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </header>
 
         {/* Content Body */}
-        <main className="px-5 pt-3 flex-1">
+        <main className="px-5 pt-3 flex-1 md:px-8 md:pt-5">
           {!isOnline && activeTab !== 'add' && (
             <p className="mb-3 rounded-xl border border-[var(--border-surface)] bg-[var(--bg-surface)] px-3 py-2 text-xs text-[var(--text-muted)]">
               Offline — showing the saved library. Changes are unavailable.
@@ -377,7 +534,9 @@ export default function CollectionPage() {
                 </p>
               </div>
             ) : user ? (
-              <AddGameForm onAddGame={handleAddNewGame} />
+              <div className="mx-auto w-full max-w-6xl">
+                <AddGameForm onAddGame={handleAddNewGame} />
+              </div>
             ) : (
               <div className="py-16 text-center space-y-3">
                 <p className="text-sm font-bold">Sign in to add games.</p>
@@ -407,7 +566,7 @@ export default function CollectionPage() {
               No games match your filters.
             </div>
           ) : viewMode === 'grid' ? (
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-2 gap-3.5 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
               {filteredGames.map((game) => (
                 <GameCard
                   key={game.id}
@@ -417,7 +576,7 @@ export default function CollectionPage() {
               ))}
             </div>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
               {filteredGames.map((game) => (
                 <GameCard
                   key={game.id}
@@ -430,53 +589,7 @@ export default function CollectionPage() {
         </main>
 
         {/* Floating Bottom Navigation Bar */}
-        <nav className="fixed bottom-5 left-0 right-0 z-40 max-w-sm mx-auto px-4">
-          <div
-            style={{
-              backgroundColor: 'var(--bg-surface)',
-              borderColor: 'var(--border-surface)',
-            }}
-            className="backdrop-blur-xl border p-1.5 rounded-2xl flex items-center justify-between shadow-2xl"
-          >
-            <button
-              onClick={() => setActiveTab('collection')}
-              className={`flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all ${
-                activeTab === 'collection'
-                  ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg shadow-[#0e8396]/20 dark:shadow-[#38e1ff]/20'
-                  : 'text-[#536482] dark:text-[#8ba2c4]'
-              }`}
-            >
-              <BookIcon size={16} />
-              <span>Collection</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('wanted')}
-              className={`flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all ${
-                activeTab === 'wanted'
-                  ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg shadow-[#0e8396]/20 dark:shadow-[#38e1ff]/20'
-                  : 'text-[#536482] dark:text-[#8ba2c4]'
-              }`}
-            >
-              <HeartIcon size={16} />
-              <span>Wanted</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('add')}
-              disabled={!user || isAuthLoading || !isOnline}
-              title={!isOnline ? 'Connect to add games' : !user ? 'Sign in to add games' : 'Add a game'}
-              className={`flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all ${
-                activeTab === 'add'
-                  ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg shadow-[#0e8396]/20 dark:shadow-[#38e1ff]/20'
-                  : 'text-[#536482] dark:text-[#8ba2c4]'
-              } disabled:opacity-40 disabled:cursor-not-allowed`}
-            >
-              <PlusCircleIcon size={16} />
-              <span>Add</span>
-            </button>
-          </div>
-        </nav>
+        {renderNavigation(false)}
 
         {/* Filter and Sort Modal */}
         <FilterSortSheet
