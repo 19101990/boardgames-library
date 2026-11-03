@@ -364,10 +364,10 @@ export default function GameDetailPage() {
   const ownedExpansionsCount = expansions.filter((e) => e.is_owned).length;
   const statusBlock = (
     <div className="flex flex-wrap gap-2 text-xs font-semibold lg:col-start-3 lg:justify-self-end">
-      <span className="game-category-badge bg-[#d2eff4] text-[#0e8396] px-2.5 py-1 rounded-lg border border-[#a2d8e2]">
+      <span className="game-category-badge bg-[#d2eff4] text-[#0e8396] px-2 py-1 rounded-md border border-[#a2d8e2]">
         {game.categories?.[0] || 'Base game'}
       </span>
-      <span className="bg-[#e2e8f0] text-[#475569] dark:bg-[#12182c] dark:text-[#8ba2c4] px-2.5 py-1 rounded-lg border border-[#cbd5e1] dark:border-[#1f294a]">
+      <span className="bg-[#e2e8f0] text-[#475569] dark:bg-[#12182c] dark:text-[#8ba2c4] px-2 py-1 rounded-md border border-[#cbd5e1] dark:border-[#1f294a]">
         {game.status === 'owned' ? `In collection · ${game.language || 'EN'}` : 'Wanted'}
       </span>
     </div>
@@ -519,7 +519,7 @@ export default function GameDetailPage() {
         <div className="lg:grid lg:grid-cols-[minmax(280px,0.81fr)_minmax(0,1.1fr)_minmax(0,1.1fr)] lg:items-start lg:gap-8">
         {/* Top Hero Poster */}
         <div
-          className="relative aspect-[16/10] w-full bg-[var(--bg-hero)] flex items-center justify-center overflow-hidden lg:aspect-[3/4] lg:items-start lg:justify-start lg:bg-transparent"
+          className="relative h-[50vh] w-full bg-[var(--bg-hero)] flex items-center justify-center overflow-hidden lg:h-auto lg:aspect-[3/4] lg:items-start lg:justify-start lg:bg-transparent"
         >
           {game.image_url && !imgError ? (
             <Image
@@ -549,12 +549,26 @@ export default function GameDetailPage() {
             <ArrowLeftIcon size={18} />
           </button>
 
-          <div className="absolute top-4 right-4 z-10 lg:hidden">
+          <div className="absolute top-4 right-4 z-10 flex items-center gap-2.5 lg:hidden">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label="Toggle Theme"
+              title="Toggle Theme"
+              style={{
+                backgroundColor: 'var(--bg-surface-elevated)',
+                borderColor: 'var(--border-surface-elevated)',
+                color: 'var(--text-primary)',
+              }}
+              className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform"
+            >
+              {isDark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
+            </button>
             <AuthControl user={user} isLoading={isAuthLoading} authError={authError} />
           </div>
 
           {/* Rating Badge */}
-          <div className="absolute top-16 right-4 bg-[#ff336d] text-white px-3.5 py-1.5 rounded-2xl flex flex-col items-center shadow-lg lg:top-4">
+          <div className="absolute bottom-[10px] left-[10px] bg-[#ff336d] text-white px-2.5 py-1.5 rounded-lg flex flex-col items-center shadow-lg lg:bottom-auto lg:left-auto lg:right-4 lg:top-4">
             <span className="font-display text-2xl font-black leading-none">
               {ratingText}
             </span>
@@ -657,7 +671,7 @@ export default function GameDetailPage() {
                           {exp.is_owned ? 'Owned' : <PlusIcon size={16} />}
                         </button>
                       ) : exp.is_owned ? (
-                        <span className="rounded-lg border border-transparent bg-[#0e8396] px-2 py-1 text-[11px] font-bold text-white dark:bg-[#38e1ff] dark:text-black">
+                        <span className="rounded-md border border-transparent bg-[#0e8396] px-1.5 py-1 text-[11px] font-bold text-white dark:bg-[#38e1ff] dark:text-black">
                           Owned
                         </span>
                       ) : null}
@@ -850,7 +864,7 @@ export default function GameDetailPage() {
                 {game.mechanics.map((m) => (
                   <span
                     key={m}
-                    className="game-mechanic-badge bg-[#e2f4f7] text-[#0e8396] text-xs font-semibold px-3 py-1.5 rounded-xl border border-[#b2e3ec]"
+                    className="game-mechanic-badge bg-[#e2f4f7] text-[#0e8396] text-xs font-semibold px-2 py-1 rounded-lg border border-[#b2e3ec]"
                   >
                     {m}
                   </span>
@@ -867,7 +881,7 @@ export default function GameDetailPage() {
                 {game.categories.map((c) => (
                   <span
                     key={c}
-                    className="game-category-badge bg-[#fde8ef] text-[#d91c5c] text-xs font-semibold px-3 py-1.5 rounded-xl border border-[#f5b8cc]"
+                    className="game-category-badge bg-[#fde8ef] text-[#d91c5c] text-xs font-semibold px-2 py-1 rounded-lg border border-[#f5b8cc]"
                   >
                     {c}
                   </span>

@@ -59,13 +59,13 @@ export function GameCard({ game, viewMode, onCardClick }: GameCardProps) {
             )}
 
             {/* Rating Badge */}
-            <div className="absolute left-2 top-2 rounded-md bg-[#ff336d] px-2.5 py-1 text-center font-display text-sm font-black leading-tight text-white shadow-md">
+            <div className="absolute left-[5px] top-[5px] rounded-md bg-[#ff336d] px-1.5 py-0.5 text-center font-display text-xs font-black leading-tight text-white shadow-md md:left-2 md:top-2 md:px-2 md:py-1 md:text-sm">
               {ratingText}
             </div>
 
             {/* Language Badge - Only shown when owned and language is specified */}
             {!isWishlist && language && (
-              <div className={`absolute bottom-2.5 right-2.5 ${badgeColor} px-1.5 py-0.5 rounded-lg text-[10px] font-semibold uppercase`}>
+              <div className={`absolute bottom-[5px] right-[5px] ${badgeColor} px-1.5 py-0.5 rounded-lg text-[10px] font-semibold uppercase md:bottom-2.5 md:right-2.5`}>
                 {language}
               </div>
             )}
@@ -139,13 +139,13 @@ export function GameCard({ game, viewMode, onCardClick }: GameCardProps) {
             )}
 
             {/* Rating Badge */}
-            <div className="absolute left-2.5 top-2.5 rounded-md bg-[#ff336d] px-3 py-1.5 text-center font-display text-lg font-black leading-tight text-white shadow-md">
+            <div className="absolute left-[5px] top-[5px] rounded-md bg-[#ff336d] px-2 py-1 text-center font-display text-sm font-black leading-tight text-white shadow-md md:left-2.5 md:top-2.5 md:px-3 md:py-1.5 md:text-lg">
               {ratingText}
             </div>
 
             {/* Language Badge - Only shown when owned and language is specified */}
             {!isWishlist && language && (
-              <div className={`absolute bottom-2.5 right-2.5 ${badgeColor} px-2 py-1 rounded-lg text-xs font-semibold uppercase`}>
+              <div className={`absolute bottom-[5px] right-[5px] ${badgeColor} px-2 py-1 rounded-lg text-xs font-semibold uppercase md:bottom-2.5 md:right-2.5`}>
                 {language}
               </div>
             )}
