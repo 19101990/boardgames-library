@@ -15,7 +15,7 @@ import {
   removeCachedGame,
 } from '@/lib/offlineGameStore';
 import { useOnlineStatus } from '@/lib/useOnlineStatus';
-import { BoardGame, BggExpansion, Expansion, PlaySession } from '@/types/types';
+import { BoardGame, Expansion, PlaySession } from '@/types/types';
 import {
   UsersIcon,
   ClockIcon,
@@ -51,8 +51,6 @@ export default function GameDetailPage() {
   // Expansions section accordion state
   const [isExpansionsOpen, setIsExpansionsOpen] = useState(false);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
-  const [isRefreshingExpansions, setIsRefreshingExpansions] = useState(false);
-  const [expansionRefreshMessage, setExpansionRefreshMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setIsDark(document.documentElement.classList.contains('dark'));
@@ -264,65 +262,6 @@ export default function GameDetailPage() {
       void cacheGameDetails(game, updatedExpansions, plays, hasCachedDetailLists).catch((cacheError: unknown) => {
         console.error('Could not update saved expansion details:', cacheError);
       });
-    }
-  };
-
-  const handleRefreshExpansions = async () => {
-    if (!game?.bgg_id || !user || !isOnline || !navigator.onLine || isRefreshingExpansions) return;
-
-    setIsRefreshingExpansions(true);
-    setExpansionRefreshMessage(null);
-
-    try {
-      const response = await fetch(`/api/bgg?id=${game.bgg_id}`);
-      const result: { expansions?: BggExpansion[]; error?: string } = await response.json();
-      if (!response.ok) throw new Error(result.error ?? 'Could not load expansions from BGG.');
-
-      const knownTitles = new Set(expansions.map((expansion) => expansion.title.trim().toLowerCase()));
-      const missingExpansions = (result.expansions ?? []).filter(
-        (expansion) => !knownTitles.has(expansion.title.trim().toLowerCase())
-      );
-
-      if (missingExpansions.length === 0) {
-        setExpansionRefreshMessage(
-          result.expansions?.length
-            ? 'Your expansion list is already up to date.'
-            : 'BGG does not list expansions for this game.'
-        );
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('expansions')
-        .insert(
-          missingExpansions.map((expansion) => ({
-            game_id: game.id,
-            title: expansion.title,
-            is_owned: false,
-          }))
-        )
-        .select('*');
-
-      if (error) throw new Error(error.message);
-
-      const updatedExpansions = [...expansions, ...((data ?? []) as Expansion[])].sort((a, b) =>
-        a.title.localeCompare(b.title)
-      );
-      setExpansions(updatedExpansions);
-      setHasCachedDetailLists(true);
-      setExpansionRefreshMessage(
-        `Added ${missingExpansions.length} expansion${missingExpansions.length === 1 ? '' : 's'} from BGG.`
-      );
-      void cacheGameDetails(game, updatedExpansions, plays).catch((cacheError: unknown) => {
-        console.error('Could not save refreshed expansions for offline use:', cacheError);
-      });
-    } catch (error) {
-      console.error('Could not refresh expansions from BGG:', error);
-      setExpansionRefreshMessage(
-        error instanceof Error ? error.message : 'Could not load expansions from BGG.'
-      );
-    } finally {
-      setIsRefreshingExpansions(false);
     }
   };
 
@@ -680,29 +619,6 @@ export default function GameDetailPage() {
                 }`}
               />
             </button>
-            {user && (
-              <div className="mt-2 flex flex-col items-start gap-2">
-                <button
-                  type="button"
-                  onClick={handleRefreshExpansions}
-                  disabled={!game.bgg_id || !isOnline || isRefreshingExpansions}
-                  className="text-xs font-bold text-[#0e8396] hover:underline disabled:cursor-not-allowed disabled:opacity-50 dark:text-[#38e1ff] dark:disabled:text-[var(--text-muted)]"
-                >
-                  {isRefreshingExpansions ? 'Fetching from BGG...' : 'Fetch expansions from BGG'}
-                </button>
-                {!game.bgg_id && (
-                  <p className="text-xs text-[var(--text-muted)]">
-                    This game is not linked to a BGG ID.
-                  </p>
-                )}
-                {expansionRefreshMessage && (
-                  <p className="text-xs text-[var(--text-muted)]" role="status">
-                    {expansionRefreshMessage}
-                  </p>
-                )}
-              </div>
-            )}
-
             {isExpansionsOpen && (
               <div className="mt-3 space-y-2 pt-2 animate-in fade-in duration-150">
                 {expansions.length === 0 ? (
@@ -715,25 +631,36 @@ export default function GameDetailPage() {
                   expansions.map((exp) => (
                     <div
                       key={exp.id}
-                      onClick={user && isOnline ? () => handleToggleExpansion(exp) : undefined}
                       style={{
                         backgroundColor: 'var(--bg-surface)',
                         borderColor: 'var(--border-surface)',
                       }}
-                      className={`p-3 rounded-2xl border flex items-center justify-between transition-transform ${
-                        user && isOnline ? 'cursor-pointer active:scale-[0.99]' : ''
-                      }`}
+                      className="p-3 rounded-2xl border flex items-center justify-between"
                     >
                       <span className="text-xs font-semibold">{exp.title}</span>
-                      <span
-                        className={`text-[11px] font-bold px-2 py-0.5 rounded-lg border ${
-                          exp.is_owned
-                            ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black border-transparent'
-                            : 'bg-[var(--bg-surface-elevated)] border-[var(--border-surface-elevated)] text-[var(--text-muted)]'
-                        }`}
-                      >
-                        {exp.is_owned ? 'Owned' : 'Wanted'}
-                      </span>
+                      {user && isOnline ? (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleExpansion(exp)}
+                          aria-label={
+                            exp.is_owned
+                              ? `Mark ${exp.title} as not owned`
+                              : `Mark ${exp.title} as owned`
+                          }
+                          aria-pressed={exp.is_owned}
+                          className={`flex h-8 min-w-8 items-center justify-center rounded-lg border px-2 transition-transform active:scale-95 ${
+                            exp.is_owned
+                              ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black border-transparent text-[11px] font-bold'
+                              : 'bg-[var(--bg-surface-elevated)] border-[var(--border-surface-elevated)] text-[var(--text-muted)]'
+                          }`}
+                        >
+                          {exp.is_owned ? 'Owned' : <PlusIcon size={16} />}
+                        </button>
+                      ) : exp.is_owned ? (
+                        <span className="rounded-lg border border-transparent bg-[#0e8396] px-2 py-1 text-[11px] font-bold text-white dark:bg-[#38e1ff] dark:text-black">
+                          Owned
+                        </span>
+                      ) : null}
                     </div>
                   ))
                 )}

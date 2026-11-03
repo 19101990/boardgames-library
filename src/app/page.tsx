@@ -499,19 +499,23 @@ export default function CollectionPage() {
                   >
                     {isDark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
                   </button>
-                  <button
-                    onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                    aria-label="Toggle View Mode"
-                    style={{
-                      backgroundColor: 'var(--bg-surface-elevated)',
-                      borderColor: 'var(--border-surface-elevated)',
-                      color: 'var(--text-primary)',
-                    }}
-                    className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform text-sm"
-                    title="Toggle View Mode"
-                  >
-                    {viewMode === 'grid' ? <ListIcon size={18} /> : <GridIcon size={18} />}
-                  </button>
+                  {user && (
+                    <button
+                      type="button"
+                      onClick={handleRefreshBgg}
+                      disabled={!isOnline || isRefreshingBgg}
+                      aria-label="Refresh all games from BoardGameGeek"
+                      title="Refresh all games from BoardGameGeek"
+                      style={{
+                        backgroundColor: 'var(--bg-surface-elevated)',
+                        borderColor: 'var(--border-surface-elevated)',
+                        color: 'var(--text-primary)',
+                      }}
+                      className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform disabled:opacity-50"
+                    >
+                      <RefreshIcon size={18} className={isRefreshingBgg ? 'animate-spin' : ''} />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -555,23 +559,20 @@ export default function CollectionPage() {
                 >
                   <SlidersIcon size={18} />
                 </button>
-                {user && (
-                  <button
-                    type="button"
-                    onClick={handleRefreshBgg}
-                    disabled={!isOnline || isRefreshingBgg}
-                    aria-label="Refresh all games from BoardGameGeek"
-                    title="Refresh all games from BoardGameGeek"
-                    style={{
-                      backgroundColor: 'var(--bg-surface-elevated)',
-                      borderColor: 'var(--border-surface-elevated)',
-                      color: 'var(--text-primary)',
-                    }}
-                    className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform shrink-0 disabled:opacity-50"
-                  >
-                    <RefreshIcon size={18} className={isRefreshingBgg ? 'animate-spin' : ''} />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                  aria-label="Toggle View Mode"
+                  title="Toggle View Mode"
+                  style={{
+                    backgroundColor: 'var(--bg-surface-elevated)',
+                    borderColor: 'var(--border-surface-elevated)',
+                    color: 'var(--text-primary)',
+                  }}
+                  className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform text-sm shrink-0"
+                >
+                  {viewMode === 'grid' ? <ListIcon size={18} /> : <GridIcon size={18} />}
+                </button>
               </div>
             </div>
           )}
@@ -636,23 +637,20 @@ export default function CollectionPage() {
                   >
                     <SlidersIcon size={18} />
                   </button>
-                  {user && (
-                    <button
-                      type="button"
-                      onClick={handleRefreshBgg}
-                      disabled={!isOnline || isRefreshingBgg}
-                      aria-label="Refresh all games from BoardGameGeek"
-                      title="Refresh all games from BoardGameGeek"
-                      style={{
-                        backgroundColor: 'var(--bg-surface-elevated)',
-                        borderColor: 'var(--border-surface-elevated)',
-                        color: 'var(--text-primary)',
-                      }}
-                      className="w-10 h-10 shrink-0 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform disabled:opacity-50"
-                    >
-                      <RefreshIcon size={18} className={isRefreshingBgg ? 'animate-spin' : ''} />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                    aria-label="Toggle View Mode"
+                    title="Toggle View Mode"
+                    style={{
+                      backgroundColor: 'var(--bg-surface-elevated)',
+                      borderColor: 'var(--border-surface-elevated)',
+                      color: 'var(--text-primary)',
+                    }}
+                    className="w-10 h-10 shrink-0 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform text-sm"
+                  >
+                    {viewMode === 'grid' ? <ListIcon size={18} /> : <GridIcon size={18} />}
+                  </button>
                 </div>
               ) : (
                 <div className="flex-1" />
@@ -674,20 +672,21 @@ export default function CollectionPage() {
                 >
                   {isDark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
                 </button>
-                {activeTab !== 'add' && (
+                {activeTab !== 'add' && user && (
                   <button
                     type="button"
-                    onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                    aria-label="Toggle View Mode"
-                    title="Toggle View Mode"
+                    onClick={handleRefreshBgg}
+                    disabled={!isOnline || isRefreshingBgg}
+                    aria-label="Refresh all games from BoardGameGeek"
+                    title="Refresh all games from BoardGameGeek"
                     style={{
                       backgroundColor: 'var(--bg-surface-elevated)',
                       borderColor: 'var(--border-surface-elevated)',
                       color: 'var(--text-primary)',
                     }}
-                    className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform text-sm"
+                    className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform disabled:opacity-50"
                   >
-                    {viewMode === 'grid' ? <ListIcon size={18} /> : <GridIcon size={18} />}
+                    <RefreshIcon size={18} className={isRefreshingBgg ? 'animate-spin' : ''} />
                   </button>
                 )}
               </div>
