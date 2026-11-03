@@ -141,7 +141,7 @@ export default function CollectionPage() {
   // Filters State
   const [players, setPlayers] = useState('Any');
   const [playTime, setPlayTime] = useState('Any');
-  const [sortBy, setSortBy] = useState('title');
+  const [sortBy, setSortBy] = useState('rating');
   const [activeTab, setActiveTab] = useState<'collection' | 'wanted' | 'add'>('collection');
 
   const filteredGames = useMemo(() => {
@@ -194,7 +194,7 @@ export default function CollectionPage() {
   const handleReset = () => {
     setPlayers('Any');
     setPlayTime('Any');
-    setSortBy('title');
+    setSortBy('rating');
     setSearch('');
   };
 
