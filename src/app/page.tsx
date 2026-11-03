@@ -7,9 +7,15 @@ import { AddGameForm } from '@/components/games/AddGameForm';
 import { FilterSortSheet } from '@/components/games/FilterSortSheet';
 import { AuthControl } from '@/components/auth/AuthControl';
 import { useSupabaseAuth } from '@/lib/useSupabaseAuth';
-import { cacheGame, cacheGames, getCachedGames, isNetworkError } from '@/lib/offlineGameStore';
+import {
+  cacheGame,
+  cacheGameDetails,
+  cacheGames,
+  getCachedGames,
+  isNetworkError,
+} from '@/lib/offlineGameStore';
 import { useOnlineStatus } from '@/lib/useOnlineStatus';
-import { BoardGame } from '@/types/types';
+import { BoardGame, Expansion, NewBoardGame } from '@/types/types';
 import {
   SunIcon,
   MoonIcon,
@@ -20,6 +26,7 @@ import {
   BookIcon,
   HeartIcon,
   PlusCircleIcon,
+  RefreshIcon,
 } from '@/components/ui/Icons';
 
 export default function CollectionPage() {
@@ -33,6 +40,8 @@ export default function CollectionPage() {
   const [search, setSearch] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isDark, setIsDark] = useState(true);
+  const [isRefreshingBgg, setIsRefreshingBgg] = useState(false);
+  const [bggRefreshProgress, setBggRefreshProgress] = useState<string | null>(null);
 
   // Fetch games from Supabase
   const fetchGames = useCallback(async () => {
@@ -132,7 +141,7 @@ export default function CollectionPage() {
   // Filters State
   const [players, setPlayers] = useState('Any');
   const [playTime, setPlayTime] = useState('Any');
-  const [sortBy, setSortBy] = useState('title');
+  const [sortBy, setSortBy] = useState('rating');
   const [activeTab, setActiveTab] = useState<'collection' | 'wanted' | 'add'>('collection');
 
   const filteredGames = useMemo(() => {
@@ -185,14 +194,122 @@ export default function CollectionPage() {
   const handleReset = () => {
     setPlayers('Any');
     setPlayTime('Any');
-    setSortBy('title');
+    setSortBy('rating');
     setSearch('');
+  };
+
+  const handleRefreshBgg = async () => {
+    if (!user || !isOnline || !navigator.onLine || isRefreshingBgg) return;
+
+    const linkedGames = games.filter((game) => game.bgg_id);
+    const skippedCount = games.length - linkedGames.length;
+    if (linkedGames.length === 0) {
+      setBggRefreshProgress('No games are linked to BoardGameGeek.');
+      return;
+    }
+
+    setIsRefreshingBgg(true);
+    let updatedCount = 0;
+    let failedCount = 0;
+    let addedExpansionCount = 0;
+    setBggRefreshProgress(`Refreshing 0 of ${linkedGames.length} BGG games...`);
+
+    for (const [index, game] of linkedGames.entries()) {
+      setBggRefreshProgress(`Refreshing ${index + 1} of ${linkedGames.length}: ${game.title}`);
+
+      try {
+        const response = await fetch(`/api/bgg?id=${game.bgg_id}`);
+        const metadata: {
+          title: string;
+          year_published: number | null;
+          min_players: number;
+          max_players: number;
+          min_playtime: number | null;
+          max_playtime: number | null;
+          bgg_rating: number | null;
+          complexity_weight: number | null;
+          description: string | null;
+          image_url: string | null;
+          thumbnail_url: string | null;
+          categories: string[];
+          mechanics: string[];
+          expansions: { bgg_id: number; title: string }[];
+          error?: string;
+        } = await response.json();
+        if (!response.ok) throw new Error(metadata.error ?? 'Could not load BGG game data.');
+
+        const updatePayload = {
+          title: metadata.title,
+          year_published: metadata.year_published,
+          min_players: metadata.min_players,
+          max_players: metadata.max_players,
+          min_playtime: metadata.min_playtime,
+          max_playtime: metadata.max_playtime,
+          rating: metadata.bgg_rating,
+          weight: metadata.complexity_weight,
+          description: metadata.description,
+          image_url: metadata.image_url,
+          thumbnail_url: metadata.thumbnail_url,
+          categories: metadata.categories,
+          mechanics: metadata.mechanics,
+        };
+        const { error } = await supabase.from('games').update(updatePayload).eq('id', game.id);
+        if (error) throw new Error(error.message);
+
+        const updatedGame = { ...game, ...updatePayload };
+        setGames((previousGames) =>
+          previousGames.map((previousGame) =>
+            previousGame.id === game.id ? updatedGame : previousGame
+          )
+        );
+        void cacheGame(updatedGame).catch((cacheError: unknown) => {
+          console.error(`Could not cache refreshed game "${game.title}":`, cacheError);
+        });
+        updatedCount += 1;
+
+        const { data: existingExpansions, error: existingError } = await supabase
+          .from('expansions')
+          .select('title')
+          .eq('game_id', game.id);
+        if (existingError) throw new Error(`Game updated, but expansions could not be checked: ${existingError.message}`);
+
+        const existingTitles = new Set(
+          (existingExpansions ?? []).map((expansion) => expansion.title.trim().toLowerCase())
+        );
+        const newExpansions = metadata.expansions.filter(
+          (expansion) => !existingTitles.has(expansion.title.trim().toLowerCase())
+        );
+        if (newExpansions.length > 0) {
+          const { error: expansionError } = await supabase.from('expansions').insert(
+            newExpansions.map((expansion) => ({
+              game_id: game.id,
+              title: expansion.title,
+              is_owned: false,
+            }))
+          );
+          if (expansionError) throw new Error(`Game updated, but expansions could not be saved: ${expansionError.message}`);
+          addedExpansionCount += newExpansions.length;
+        }
+      } catch (error) {
+        failedCount += 1;
+        console.error(`Could not refresh BGG data for "${game.title}":`, error);
+      }
+
+      if (index < linkedGames.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 750));
+      }
+    }
+
+    setBggRefreshProgress(
+      `Refresh complete: ${updatedCount} updated, ${failedCount} failed, ${addedExpansionCount} new expansions added, ${skippedCount} without a BGG ID skipped.`
+    );
+    setIsRefreshingBgg(false);
   };
 
   const ownedCount = games.filter((g) => g.status === 'owned').length;
   const wantedCount = games.filter((g) => g.status === 'wishlist').length;
 
-  const handleAddNewGame = async (newGame: Partial<BoardGame>, targetStatus: 'owned' | 'wishlist') => {
+  const handleAddNewGame = async (newGame: NewBoardGame, targetStatus: 'owned' | 'wishlist') => {
     if (!isOnline || !navigator.onLine) {
       alert('Connect to the internet before changing your library.');
       return;
@@ -203,7 +320,8 @@ export default function CollectionPage() {
     }
 
     // Optimistic UI update
-    setGames((prev) => [newGame as BoardGame, ...prev]);
+    const optimisticGame = newGame as BoardGame;
+    setGames((prev) => [optimisticGame, ...prev]);
     setActiveTab(targetStatus === 'owned' ? 'collection' : 'wanted');
 
     // Prepare payload matching the Supabase games table schema
@@ -233,11 +351,36 @@ export default function CollectionPage() {
       console.error('Error inserting game into Supabase:', error);
       alert(`Could not save "${newGame.title}" to database: ${error.message}`);
       // Revert optimistic update
-      setGames((prev) => prev.filter((g) => g.id !== newGame.id));
+      setGames((prev) => prev.filter((game) => game !== optimisticGame));
     } else {
       void cacheGame(payload as BoardGame).catch((cacheError: unknown) => {
         console.error('Could not save the new game for offline use:', cacheError);
       });
+
+      if (newGame.bgg_expansions?.length) {
+        const expansionRows = newGame.bgg_expansions.map((expansion) => ({
+          game_id: newGame.id,
+          title: expansion.title,
+          is_owned: false,
+        }));
+        const { data: savedExpansions, error: expansionError } = await supabase
+          .from('expansions')
+          .insert(expansionRows)
+          .select('*');
+
+        if (expansionError) {
+          console.error('Error inserting BGG expansions into Supabase:', expansionError);
+          alert(`Game saved, but its expansions could not be saved: ${expansionError.message}`);
+        } else {
+          void cacheGameDetails(
+            payload as BoardGame,
+            (savedExpansions ?? []) as Expansion[],
+            [],
+          ).catch((cacheError: unknown) => {
+            console.error('Could not save the new game expansions for offline use:', cacheError);
+          });
+        }
+      }
     }
   };
 
@@ -356,19 +499,23 @@ export default function CollectionPage() {
                   >
                     {isDark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
                   </button>
-                  <button
-                    onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                    aria-label="Toggle View Mode"
-                    style={{
-                      backgroundColor: 'var(--bg-surface-elevated)',
-                      borderColor: 'var(--border-surface-elevated)',
-                      color: 'var(--text-primary)',
-                    }}
-                    className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform text-sm"
-                    title="Toggle View Mode"
-                  >
-                    {viewMode === 'grid' ? <ListIcon size={18} /> : <GridIcon size={18} />}
-                  </button>
+                  {user && (
+                    <button
+                      type="button"
+                      onClick={handleRefreshBgg}
+                      disabled={!isOnline || isRefreshingBgg}
+                      aria-label="Refresh all games from BoardGameGeek"
+                      title="Refresh all games from BoardGameGeek"
+                      style={{
+                        backgroundColor: 'var(--bg-surface-elevated)',
+                        borderColor: 'var(--border-surface-elevated)',
+                        color: 'var(--text-primary)',
+                      }}
+                      className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform disabled:opacity-50"
+                    >
+                      <RefreshIcon size={18} className={isRefreshingBgg ? 'animate-spin' : ''} />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -411,6 +558,20 @@ export default function CollectionPage() {
                   className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform shrink-0"
                 >
                   <SlidersIcon size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                  aria-label="Toggle View Mode"
+                  title="Toggle View Mode"
+                  style={{
+                    backgroundColor: 'var(--bg-surface-elevated)',
+                    borderColor: 'var(--border-surface-elevated)',
+                    color: 'var(--text-primary)',
+                  }}
+                  className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform text-sm shrink-0"
+                >
+                  {viewMode === 'grid' ? <ListIcon size={18} /> : <GridIcon size={18} />}
                 </button>
               </div>
             </div>
@@ -476,6 +637,20 @@ export default function CollectionPage() {
                   >
                     <SlidersIcon size={18} />
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                    aria-label="Toggle View Mode"
+                    title="Toggle View Mode"
+                    style={{
+                      backgroundColor: 'var(--bg-surface-elevated)',
+                      borderColor: 'var(--border-surface-elevated)',
+                      color: 'var(--text-primary)',
+                    }}
+                    className="w-10 h-10 shrink-0 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform text-sm"
+                  >
+                    {viewMode === 'grid' ? <ListIcon size={18} /> : <GridIcon size={18} />}
+                  </button>
                 </div>
               ) : (
                 <div className="flex-1" />
@@ -497,25 +672,31 @@ export default function CollectionPage() {
                 >
                   {isDark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
                 </button>
-                {activeTab !== 'add' && (
+                {activeTab !== 'add' && user && (
                   <button
                     type="button"
-                    onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                    aria-label="Toggle View Mode"
-                    title="Toggle View Mode"
+                    onClick={handleRefreshBgg}
+                    disabled={!isOnline || isRefreshingBgg}
+                    aria-label="Refresh all games from BoardGameGeek"
+                    title="Refresh all games from BoardGameGeek"
                     style={{
                       backgroundColor: 'var(--bg-surface-elevated)',
                       borderColor: 'var(--border-surface-elevated)',
                       color: 'var(--text-primary)',
                     }}
-                    className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform text-sm"
+                    className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform disabled:opacity-50"
                   >
-                    {viewMode === 'grid' ? <ListIcon size={18} /> : <GridIcon size={18} />}
+                    <RefreshIcon size={18} className={isRefreshingBgg ? 'animate-spin' : ''} />
                   </button>
                 )}
               </div>
             </div>
           </div>
+          {bggRefreshProgress && activeTab !== 'add' && (
+            <p className="mt-3 text-xs text-[var(--text-muted)]" role="status" aria-live="polite">
+              {bggRefreshProgress}
+            </p>
+          )}
         </header>
 
         {/* Content Body */}

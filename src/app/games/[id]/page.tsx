@@ -619,7 +619,6 @@ export default function GameDetailPage() {
                 }`}
               />
             </button>
-
             {isExpansionsOpen && (
               <div className="mt-3 space-y-2 pt-2 animate-in fade-in duration-150">
                 {expansions.length === 0 ? (
@@ -632,25 +631,36 @@ export default function GameDetailPage() {
                   expansions.map((exp) => (
                     <div
                       key={exp.id}
-                      onClick={user && isOnline ? () => handleToggleExpansion(exp) : undefined}
                       style={{
                         backgroundColor: 'var(--bg-surface)',
                         borderColor: 'var(--border-surface)',
                       }}
-                      className={`p-3 rounded-2xl border flex items-center justify-between transition-transform ${
-                        user && isOnline ? 'cursor-pointer active:scale-[0.99]' : ''
-                      }`}
+                      className="p-3 rounded-2xl border flex items-center justify-between"
                     >
                       <span className="text-xs font-semibold">{exp.title}</span>
-                      <span
-                        className={`text-[11px] font-bold px-2 py-0.5 rounded-lg border ${
-                          exp.is_owned
-                            ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black border-transparent'
-                            : 'bg-[var(--bg-surface-elevated)] border-[var(--border-surface-elevated)] text-[var(--text-muted)]'
-                        }`}
-                      >
-                        {exp.is_owned ? 'Owned' : 'Wanted'}
-                      </span>
+                      {user && isOnline ? (
+                        <button
+                          type="button"
+                          onClick={() => handleToggleExpansion(exp)}
+                          aria-label={
+                            exp.is_owned
+                              ? `Mark ${exp.title} as not owned`
+                              : `Mark ${exp.title} as owned`
+                          }
+                          aria-pressed={exp.is_owned}
+                          className={`flex h-8 min-w-8 items-center justify-center rounded-lg border px-2 transition-transform active:scale-95 ${
+                            exp.is_owned
+                              ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black border-transparent text-[11px] font-bold'
+                              : 'bg-[var(--bg-surface-elevated)] border-[var(--border-surface-elevated)] text-[var(--text-muted)]'
+                          }`}
+                        >
+                          {exp.is_owned ? 'Owned' : <PlusIcon size={16} />}
+                        </button>
+                      ) : exp.is_owned ? (
+                        <span className="rounded-lg border border-transparent bg-[#0e8396] px-2 py-1 text-[11px] font-bold text-white dark:bg-[#38e1ff] dark:text-black">
+                          Owned
+                        </span>
+                      ) : null}
                     </div>
                   ))
                 )}

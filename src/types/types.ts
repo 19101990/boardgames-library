@@ -11,6 +11,15 @@ export interface Expansion {
   created_at?: string;
 }
 
+export interface BggExpansion {
+  bgg_id: number;
+  title: string;
+}
+
+export type NewBoardGame = Partial<BoardGame> & {
+  bgg_expansions?: BggExpansion[];
+};
+
 export interface PlaySession {
   id: string;
   game_id: string;

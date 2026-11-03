@@ -58,6 +58,18 @@ function links(record: XmlRecord, type: string): string[] {
     .filter((value): value is string => Boolean(value));
 }
 
+function expansionLinks(record: XmlRecord): { bgg_id: number; title: string }[] {
+  return asRecords(record.link)
+    .filter((link) => attribute(link, 'type') === 'boardgameexpansion')
+    .map((link) => ({
+      bgg_id: Number(attribute(link, 'id')),
+      title: attribute(link, 'value') ?? '',
+    }))
+    .filter((expansion) =>
+      Number.isSafeInteger(expansion.bgg_id) && expansion.bgg_id > 0 && expansion.title.length > 0
+    );
+}
+
 function getToken(): string | null {
   return process.env.BGG_API_TOKEN?.trim() || null;
 }
@@ -97,6 +109,15 @@ async function parseResponse(response: Response): Promise<XmlRecord> {
   return parsed.items as XmlRecord;
 }
 
+async function fetchBggItems(path: string): Promise<XmlRecord> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const response = await fetchBgg(path);
+    if (response.status !== 202 || attempt === 4) return parseResponse(response);
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  throw new Error('BGG request could not be completed.');
+}
+
 function errorResponse(error: unknown): NextResponse {
   const message = error instanceof Error ? error.message : 'BGG request failed.';
   const status = message.includes('not configured') ? 503 : 502;
@@ -114,7 +135,7 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-      const items = await parseResponse(await fetchBgg(`thing?id=${encodeURIComponent(id)}&stats=1`));
+      const items = await fetchBggItems(`thing?id=${encodeURIComponent(id)}&stats=1`);
       const item = asRecords(items.item)[0];
       if (!item) {
         return NextResponse.json({ error: 'BGG did not return that game.' }, { status: 404 });
@@ -137,6 +158,7 @@ export async function GET(request: NextRequest) {
         thumbnail_url: childText(item, 'thumbnail') ?? null,
         categories: links(item, 'boardgamecategory'),
         mechanics: links(item, 'boardgamemechanic'),
+        expansions: expansionLinks(item),
       };
 
       return NextResponse.json(game);
@@ -153,9 +175,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const items = await parseResponse(
-      await fetchBgg(`search?type=boardgame&query=${encodeURIComponent(query)}`),
-    );
+    const items = await fetchBggItems(`search?type=boardgame&query=${encodeURIComponent(query)}`);
     const results = asRecords(items.item)
       .map((item) => ({
         bgg_id: Number(attribute(item, 'id')),
