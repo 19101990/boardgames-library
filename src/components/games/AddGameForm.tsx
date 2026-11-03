@@ -2,10 +2,10 @@
 
 import { useState } from 'react';
 import { BookIcon, HeartIcon, CloudDownloadIcon } from '@/components/ui/Icons';
-import { BoardGame } from '@/types/types';
+import { BoardGame, BggExpansion, NewBoardGame } from '@/types/types';
 
 interface AddGameFormProps {
-  onAddGame: (game: Partial<BoardGame>, targetStatus: 'owned' | 'wishlist') => void;
+  onAddGame: (game: NewBoardGame, targetStatus: 'owned' | 'wishlist') => void;
 }
 
 export function AddGameForm({ onAddGame }: AddGameFormProps) {
@@ -14,7 +14,9 @@ export function AddGameForm({ onAddGame }: AddGameFormProps) {
   const [targetStatus, setTargetStatus] = useState<'owned' | 'wishlist'>('owned');
   const [language, setLanguage] = useState<'EN' | 'DE' | 'PL' | 'Other'>('EN');
   const [isFetching, setIsFetching] = useState(false);
-  const [fetchedMetadata, setFetchedMetadata] = useState<Partial<BoardGame> | null>(null);
+  const [fetchedMetadata, setFetchedMetadata] = useState<
+    (Partial<BoardGame> & { expansions?: BggExpansion[] }) | null
+  >(null);
   const [searchResults, setSearchResults] = useState<
     { bgg_id: number; title: string; year_published: number | null }[]
   >([]);
@@ -50,7 +52,11 @@ export function AddGameForm({ onAddGame }: AddGameFormProps) {
     setBggError(null);
     try {
       const response = await fetch(`/api/bgg?id=${bggId}`);
-      const game: Partial<BoardGame> & { title?: string; error?: string } = await response.json();
+      const game: Partial<BoardGame> & {
+        title?: string;
+        error?: string;
+        expansions?: BggExpansion[];
+      } = await response.json();
       if (!response.ok) throw new Error(game.error ?? 'Could not load game details.');
       if (!game.title) throw new Error('BGG returned game details without a title.');
       setFetchedMetadata(game);
@@ -74,7 +80,7 @@ export function AddGameForm({ onAddGame }: AddGameFormProps) {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/(^-|-$)/g, '');
 
-    const newGame: Partial<BoardGame> & { language?: string } = {
+    const newGame: NewBoardGame = {
       id: fetchedMetadata?.bgg_id ? `bgg-${fetchedMetadata.bgg_id}` : slug || `game-${Date.now()}`,
       bgg_id: fetchedMetadata?.bgg_id,
       title: title.trim(),
@@ -93,6 +99,7 @@ export function AddGameForm({ onAddGame }: AddGameFormProps) {
       max_playtime: fetchedMetadata?.max_playtime ?? 60,
       bgg_rating: fetchedMetadata?.bgg_rating,
       complexity_weight: fetchedMetadata?.complexity_weight,
+      bgg_expansions: fetchedMetadata?.expansions ?? [],
     };
 
     onAddGame(newGame, targetStatus);
@@ -128,6 +135,9 @@ export function AddGameForm({ onAddGame }: AddGameFormProps) {
       {fetchedMetadata?.bgg_id && (
         <p className="text-xs font-semibold text-[var(--text-muted)]">
           BGG game selected (ID {fetchedMetadata.bgg_id}); details will be saved with your game.
+          {fetchedMetadata.expansions?.length
+            ? ` ${fetchedMetadata.expansions.length} expansion${fetchedMetadata.expansions.length === 1 ? '' : 's'} will also be added.`
+            : ''}
         </p>
       )}
       {bggError && (
