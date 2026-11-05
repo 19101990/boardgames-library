@@ -33,6 +33,7 @@ import {
 
 export default function GameDetailPage() {
   const { user, isLoading: isAuthLoading, errorMessage: authError } = useSupabaseAuth();
+  const canViewPlays = Boolean(user) && !isAuthLoading;
   const { isOnline, setIsOnline } = useOnlineStatus();
   const params = useParams();
   const router = useRouter();
@@ -82,13 +83,18 @@ export default function GameDetailPage() {
     if (!rawId) return;
     setIsLoading(true);
     setOfflineCacheMiss(false);
+    if (!canViewPlays) {
+      setPlays([]);
+      setIsLoggingPlay(false);
+      setEditingPlayId(null);
+    }
 
     const loadCachedDetails = async () => {
       try {
         const cached = await getCachedGameDetails(rawId);
         setGame(cached.game);
         setExpansions(cached.expansions);
-        setPlays(cached.plays);
+        setPlays(canViewPlays ? cached.plays : []);
         setHasCachedDetailLists(cached.hasCachedDetails);
         setOfflineCacheMiss(!cached.game);
         if (cached.game) setPlayerCount(cached.game.min_players || 2);
@@ -140,15 +146,17 @@ export default function GameDetailPage() {
           .select('*')
           .eq('game_id', rawId)
           .order('title', { ascending: true }),
-        supabase
-          .from('plays')
-          .select('*')
-          .eq('game_id', rawId)
-          .order('play_date', { ascending: false }),
+        canViewPlays
+          ? supabase
+              .from('plays')
+              .select('*')
+              .eq('game_id', rawId)
+              .order('play_date', { ascending: false })
+          : Promise.resolve(null),
       ]);
 
-      if (expansionsResult.error || playsResult.error) {
-        const requestError = expansionsResult.error ?? playsResult.error;
+      if (expansionsResult.error || playsResult?.error) {
+        const requestError = expansionsResult.error ?? playsResult?.error;
         console.error('Could not fetch game history:', requestError);
 
         if (isNetworkError(requestError)) {
@@ -160,11 +168,11 @@ export default function GameDetailPage() {
       }
 
       const expansions = (expansionsResult.data ?? []) as Expansion[];
-      const plays = (playsResult.data ?? []) as PlaySession[];
+      const plays = (playsResult?.data ?? []) as PlaySession[];
       setExpansions(expansions);
       setPlays(plays);
-      setHasCachedDetailLists(!expansionsResult.error && !playsResult.error);
-      if (!expansionsResult.error && !playsResult.error) {
+      setHasCachedDetailLists(!expansionsResult.error && !playsResult?.error);
+      if (canViewPlays && !expansionsResult.error && !playsResult?.error) {
         void cacheGameDetails(gameData as BoardGame, expansions, plays).catch((cacheError: unknown) => {
           console.error('Could not save game details for offline use:', cacheError);
         });
@@ -178,7 +186,7 @@ export default function GameDetailPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [rawId, setIsOnline]);
+  }, [canViewPlays, rawId, setIsOnline]);
 
   useEffect(() => {
     fetchGameDetails();
@@ -387,10 +395,12 @@ export default function GameDetailPage() {
       </div>
     </div>
   );
-  const actionButton = game.status === 'owned' && user ? (
+  const actionButton = game.status === 'owned' ? (
     <button
-      disabled={!isOnline}
+      disabled={!canViewPlays || !isOnline}
+      title={!canViewPlays ? 'Sign in to log a play' : !isOnline ? 'Connect to log a play' : undefined}
       onClick={() => {
+        if (!canViewPlays) return;
         setEditingPlayId(null);
         setPlayDate(new Date().toISOString().split('T')[0]);
         setPlayerCount(game.min_players || 2);
@@ -689,17 +699,22 @@ export default function GameDetailPage() {
               <div>
                 <h3 className="font-display text-base font-bold">Plays</h3>
                 <p className="text-xs text-[#536482] dark:text-[#6e82a3] mt-0.5">
-                  {!isOnline && !hasCachedDetailLists
+                  {!canViewPlays
+                    ? 'Owner access only'
+                    : !isOnline && !hasCachedDetailLists
                     ? 'Play history not saved offline'
                     : plays.length > 0
                       ? `${plays.length} logged`
                       : 'Nothing logged'}
                 </p>
               </div>
-              {game.status === 'owned' && user && (
+              {game.status === 'owned' && (
                 <button
-                  disabled={!isOnline}
-                  onClick={() => setIsLoggingPlay(true)}
+                  disabled={!canViewPlays || !isOnline}
+                  title={!canViewPlays ? 'Sign in to log a play' : !isOnline ? 'Connect to log a play' : undefined}
+                  onClick={() => {
+                    if (canViewPlays) setIsLoggingPlay(true);
+                  }}
                   style={{
                     backgroundColor: 'var(--bg-surface-elevated)',
                     borderColor: 'var(--border-surface-elevated)',
@@ -713,7 +728,7 @@ export default function GameDetailPage() {
             </div>
 
             {/* In-Card Play Logging Form */}
-            {isLoggingPlay && user && (
+            {isLoggingPlay && canViewPlays && (
               <div
                 style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-surface)' }}
                 className="p-4 rounded-2xl border space-y-3.5 shadow-md animate-in fade-in duration-150"
@@ -804,7 +819,11 @@ export default function GameDetailPage() {
             )}
 
             {/* List of Previous Play Sessions */}
-            {plays.length === 0 && !isLoggingPlay ? (
+            {!canViewPlays ? (
+              <p className="text-xs italic text-[#8b9bb5] dark:text-[#55698a]">
+                Play history is available to the collection owner after signing in.
+              </p>
+            ) : plays.length === 0 && !isLoggingPlay ? (
               <p className="text-xs italic text-[#8b9bb5] dark:text-[#55698a]">
                 {!isOnline && !hasCachedDetailLists
                   ? 'Open this game online to save its play history.'
