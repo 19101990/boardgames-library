@@ -499,23 +499,29 @@ export default function CollectionPage() {
                   >
                     {isDark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
                   </button>
-                  {user && (
-                    <button
-                      type="button"
-                      onClick={handleRefreshBgg}
-                      disabled={!isOnline || isRefreshingBgg}
-                      aria-label="Refresh all games from BoardGameGeek"
-                      title="Refresh all games from BoardGameGeek"
-                      style={{
-                        backgroundColor: 'var(--bg-surface-elevated)',
-                        borderColor: 'var(--border-surface-elevated)',
-                        color: 'var(--text-primary)',
-                      }}
-                      className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform disabled:opacity-50"
-                    >
-                      <RefreshIcon size={18} className={isRefreshingBgg ? 'animate-spin' : ''} />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handleRefreshBgg}
+                    disabled={!user || !isOnline || isRefreshingBgg}
+                    aria-label="Refresh all games from BoardGameGeek"
+                    title={
+                      !user
+                        ? isAuthLoading
+                          ? 'Checking login status'
+                          : 'Sign in to refresh games from BoardGameGeek'
+                        : !isOnline
+                          ? 'Connect to refresh games from BoardGameGeek'
+                          : 'Refresh all games from BoardGameGeek'
+                    }
+                    style={{
+                      backgroundColor: 'var(--bg-surface-elevated)',
+                      borderColor: 'var(--border-surface-elevated)',
+                      color: 'var(--text-primary)',
+                    }}
+                    className="w-10 h-10 rounded-2xl border flex items-center justify-center active:scale-95 transition-transform disabled:opacity-50"
+                  >
+                    <RefreshIcon size={18} className={isRefreshingBgg ? 'animate-spin' : ''} />
+                  </button>
                 </div>
               </div>
 
@@ -672,13 +678,21 @@ export default function CollectionPage() {
                 >
                   {isDark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
                 </button>
-                {activeTab !== 'add' && user && (
+                {activeTab !== 'add' && (
                   <button
                     type="button"
                     onClick={handleRefreshBgg}
-                    disabled={!isOnline || isRefreshingBgg}
+                    disabled={!user || !isOnline || isRefreshingBgg}
                     aria-label="Refresh all games from BoardGameGeek"
-                    title="Refresh all games from BoardGameGeek"
+                    title={
+                      !user
+                        ? isAuthLoading
+                          ? 'Checking login status'
+                          : 'Sign in to refresh games from BoardGameGeek'
+                        : !isOnline
+                          ? 'Connect to refresh games from BoardGameGeek'
+                          : 'Refresh all games from BoardGameGeek'
+                    }
                     style={{
                       backgroundColor: 'var(--bg-surface-elevated)',
                       borderColor: 'var(--border-surface-elevated)',
