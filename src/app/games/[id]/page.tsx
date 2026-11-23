@@ -4,14 +4,21 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { supabase } from '@/lib/supabase';
 import { useSupabaseAuth } from '@/lib/useSupabaseAuth';
 import { AuthControl } from '@/components/auth/AuthControl';
 import { MoveToCollectionSheet } from '@/components/games/MoveToCollectionSheet';
 import { PlayRatingDisplay, PlayRatingInput } from '@/components/games/PlayRating';
 import { PLAY_RATING_ASPECTS, sanitizePlayRatings } from '@/lib/playRatings';
 import { cacheGameDetails, removeCachedGame } from '@/lib/offlineGameStore';
-import { getLibraryMode, loadGameDetails } from '@/lib/libraryData';
+import {
+  deletePlay,
+  getLibraryMode,
+  loadGameDetails,
+  moveGameToCollection,
+  removeGame,
+  savePlay,
+  setExpansionOwned,
+} from '@/lib/libraryData';
 import { DemoNotice } from '@/components/demo/DemoNotice';
 import { useOnlineStatus } from '@/lib/useOnlineStatus';
 import { BoardGame, Expansion, PlayRatings, PlaySession } from '@/types/types';
@@ -34,11 +41,11 @@ export default function GameDetailPage() {
   const { user, isLoading: isAuthLoading, errorMessage: authError } = useSupabaseAuth();
   const libraryMode = getLibraryMode(isAuthLoading, Boolean(user));
   const isDemo = libraryMode === 'demo';
+  const { isOnline, setIsOnline } = useOnlineStatus();
   // Signed in: the owner's real plays. Signed out: the demo's sample plays.
   const canViewPlays = libraryMode !== null;
-  // Demo editing arrives with local demo storage; until then only the signed-in owner can edit.
-  const canEditPlays = libraryMode === 'live';
-  const { isOnline, setIsOnline } = useOnlineStatus();
+  // Live changes go to Supabase and need a connection; demo changes are stored on this device and work offline.
+  const canEdit = libraryMode === 'demo' || (libraryMode === 'live' && isOnline);
   const params = useParams();
   const router = useRouter();
   const rawId = Array.isArray(params?.id) ? params.id[0] : params?.id;
@@ -109,60 +116,63 @@ export default function GameDetailPage() {
   }, [fetchGameDetails, isOnline]);
 
   // Insert or update a play record in Supabase
+  /** Checked right before each change, since the connection can drop after rendering. */
+  const canChangeNow = () =>
+    libraryMode === 'demo' || (libraryMode === 'live' && isOnline && navigator.onLine);
+
+  /** Keeps the real collection's offline cache in step. Demo data never goes into that cache. */
+  const updateOfflineCache = (
+    updatedGame: BoardGame,
+    updatedExpansions: Expansion[],
+    updatedPlays: PlaySession[]
+  ) => {
+    if (libraryMode !== 'live') return;
+    void cacheGameDetails(updatedGame, updatedExpansions, updatedPlays, hasCachedDetailLists).catch(
+      (cacheError: unknown) => {
+        console.error('Could not update saved game details:', cacheError);
+      }
+    );
+  };
+
+  const errorText = (error: unknown) => (error instanceof Error ? error.message : 'Unknown error');
+
+  // Create or update a play
   const handleSavePlay = async () => {
-    if (!game || !user || !isOnline || !navigator.onLine) return;
+    if (!game || !libraryMode || !canChangeNow()) return;
     setIsSavingPlay(true);
 
-    const playChanges = {
-      game_id: game.id,
-      play_date: playDate,
-      player_count: playerCount,
-      notes: playNotes.trim() || null,
-      ratings: sanitizePlayRatings(playRatings),
-    };
-
-    const result = editingPlayId
-      ? await supabase
-          .from('plays')
-          .update(playChanges)
-          .eq('id', editingPlayId)
-          .eq('game_id', game.id)
-          .select()
-          .single()
-      : await supabase.from('plays').insert([playChanges]).select().single();
-
-    if (result.error) {
-      console.error('Error saving play:', result.error);
-      alert(`Could not ${editingPlayId ? 'update' : 'save'} play session: ${result.error.message}`);
-    } else if (result.data) {
-      const savedPlay = result.data as PlaySession;
-      const updatedPlays = editingPlayId
-        ? plays
-            .map((play) => (play.id === savedPlay.id ? savedPlay : play))
-            .sort((a, b) => b.play_date.localeCompare(a.play_date))
-        : [savedPlay, ...plays];
-      setPlays(updatedPlays);
-      void cacheGameDetails(game, expansions, updatedPlays, hasCachedDetailLists).catch((cacheError: unknown) => {
-        console.error('Could not update saved game history:', cacheError);
+    const existingPlay = editingPlayId ? plays.find((play) => play.id === editingPlayId) ?? null : null;
+    try {
+      const savedPlay = await savePlay(libraryMode, game.id, existingPlay, {
+        play_date: playDate,
+        player_count: playerCount,
+        notes: playNotes.trim() || null,
+        ratings: sanitizePlayRatings(playRatings),
       });
+      const updatedPlays = (
+        existingPlay ? plays.map((play) => (play.id === savedPlay.id ? savedPlay : play)) : [savedPlay, ...plays]
+      ).sort((a, b) => b.play_date.localeCompare(a.play_date));
+      setPlays(updatedPlays);
+      updateOfflineCache(game, expansions, updatedPlays);
       setIsLoggingPlay(false);
       setEditingPlayId(null);
       setPlayNotes('');
       setPlayRatings({});
+    } catch (error) {
+      alert(`Could not ${existingPlay ? 'update' : 'save'} play session: ${errorText(error)}`);
+    } finally {
+      setIsSavingPlay(false);
     }
-    setIsSavingPlay(false);
   };
 
-  const logPlayDisabledReason = isDemo
-    ? 'Logging plays isn’t available in the demo yet'
-    : !canEditPlays
-      ? 'Sign in to log a play'
-      : !isOnline
-        ? 'Connect to log a play'
-        : undefined;
+  const logPlayDisabledReason = !libraryMode
+    ? 'Checking login status'
+    : !canEdit
+      ? 'Connect to log a play'
+      : undefined;
 
   const handleStartNewPlay = () => {
-    if (!canEditPlays || !game) return;
+    if (!canEdit || !game) return;
     setEditingPlayId(null);
     setPlayDate(new Date().toISOString().split('T')[0]);
     setPlayerCount(game.min_players || 2);
@@ -180,9 +190,9 @@ export default function GameDetailPage() {
     setIsLoggingPlay(true);
   };
 
-  // Toggle expansion ownership in Supabase
+  // Toggle expansion ownership
   const handleToggleExpansion = async (expansion: Expansion) => {
-    if (!game || !user || !isOnline || !navigator.onLine) return;
+    if (!game || !libraryMode || !canChangeNow()) return;
     const updatedStatus = !expansion.is_owned;
     const updatedExpansions = expansions.map((item) =>
       item.id === expansion.id ? { ...item, is_owned: updatedStatus } : item
@@ -191,82 +201,65 @@ export default function GameDetailPage() {
     // Optimistic UI update
     setExpansions(updatedExpansions);
 
-    const { error } = await supabase
-      .from('expansions')
-      .update({ is_owned: updatedStatus })
-      .eq('id', expansion.id);
-
-    if (error) {
-      console.error('Error updating expansion:', error);
-      alert(`Could not update expansion: ${error.message}`);
+    try {
+      await setExpansionOwned(libraryMode, expansion, updatedStatus);
+      updateOfflineCache(game, updatedExpansions, plays);
+    } catch (error) {
+      alert(`Could not update expansion: ${errorText(error)}`);
       // Revert on error
       setExpansions((prev) =>
         prev.map((e) => (e.id === expansion.id ? { ...e, is_owned: expansion.is_owned } : e))
       );
-    } else {
-      void cacheGameDetails(game, updatedExpansions, plays, hasCachedDetailLists).catch((cacheError: unknown) => {
-        console.error('Could not update saved expansion details:', cacheError);
-      });
     }
   };
 
   // Delete a play session
   const handleDeletePlay = async (playId: string) => {
-    if (!game || !user || !isOnline || !navigator.onLine) return;
-    const { error } = await supabase.from('plays').delete().eq('id', playId);
-    if (!error) {
+    if (!game || !libraryMode || !canChangeNow()) return;
+    try {
+      await deletePlay(libraryMode, playId);
       const updatedPlays = plays.filter((play) => play.id !== playId);
       setPlays(updatedPlays);
-      void cacheGameDetails(game, expansions, updatedPlays, hasCachedDetailLists).catch((cacheError: unknown) => {
-        console.error('Could not update saved game history:', cacheError);
-      });
-    } else {
-      console.error('Error deleting play:', error);
-      alert(`Could not delete play: ${error.message}`);
+      updateOfflineCache(game, expansions, updatedPlays);
+    } catch (error) {
+      alert(`Could not delete play: ${errorText(error)}`);
     }
   };
 
-  // Remove game from library
+  // Remove game from library (in the demo, its plays and expansions go with it)
   const handleRemoveGame = async () => {
-    if (!game || !user || !isOnline || !navigator.onLine) return;
-    const confirmed = window.confirm(
-      game.status === 'wishlist'
-        ? `Remove "${game.title}" from your wanted list?`
-        : `Remove "${game.title}" from your library?`
-    );
+    if (!game || !libraryMode || !canChangeNow()) return;
+    const listName = game.status === 'wishlist' ? 'wanted list' : isDemo ? 'demo collection' : 'library';
+    const playsNote =
+      isDemo && plays.length > 0
+        ? ` This also deletes its ${plays.length} logged play${plays.length === 1 ? '' : 's'}.`
+        : '';
+    const confirmed = window.confirm(`Remove "${game.title}" from your ${listName}?${playsNote}`);
     if (!confirmed) return;
 
-    const { error } = await supabase.from('games').delete().eq('id', game.id);
-    if (!error) {
-      void removeCachedGame(game.id).catch((cacheError: unknown) => {
-        console.error('Could not remove the deleted game from offline storage:', cacheError);
-      });
+    try {
+      await removeGame(libraryMode, game.id);
+      if (libraryMode === 'live') {
+        void removeCachedGame(game.id).catch((cacheError: unknown) => {
+          console.error('Could not remove the deleted game from offline storage:', cacheError);
+        });
+      }
       router.push('/');
-    } else {
-      console.error('Error deleting game:', error);
-      alert('Could not remove game.');
+    } catch (error) {
+      alert(`Could not remove game: ${errorText(error)}`);
     }
   };
 
-  const handleMoveToCollection = async (gameId: string, language: string) => {
-    if (!game || !user || !isOnline || !navigator.onLine) return;
+  const handleMoveToCollection = async (_gameId: string, language: string) => {
+    if (!game || !libraryMode || !canChangeNow()) return;
 
-    const { error } = await supabase
-      .from('games')
-      .update({ status: 'owned', language })
-      .eq('id', gameId);
-
-    if (error) {
-      console.error('Error moving game to collection:', error);
-      alert(`Could not add game to collection: ${error.message}`);
-      return;
+    try {
+      const updatedGame = await moveGameToCollection(libraryMode, game, language);
+      setGame(updatedGame);
+      updateOfflineCache(updatedGame, expansions, plays);
+    } catch (error) {
+      alert(`Could not add game to collection: ${errorText(error)}`);
     }
-
-    const updatedGame = { ...game, status: 'owned' as const, language };
-    setGame(updatedGame);
-    void cacheGameDetails(updatedGame, expansions, plays, hasCachedDetailLists).catch((cacheError: unknown) => {
-      console.error('Could not update saved game status:', cacheError);
-    });
   };
 
   const getWeightLabel = (w?: number | null) => {
@@ -334,7 +327,7 @@ export default function GameDetailPage() {
   );
   const actionButton = game.status === 'owned' ? (
     <button
-      disabled={!canEditPlays || !isOnline}
+      disabled={!canEdit}
       title={logPlayDisabledReason}
       onClick={handleStartNewPlay}
       className="w-full h-12 rounded-2xl bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black font-display font-black text-sm flex items-center justify-center gap-2.5 shadow-lg active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
@@ -539,10 +532,10 @@ export default function GameDetailPage() {
             <div className="contents lg:col-start-1 lg:row-start-1 lg:flex lg:flex-col lg:gap-6">
               <div className="hidden lg:block">{descriptionBlock}</div>
               <div className="hidden lg:block">{coreInfo}</div>
-              {game.status === 'owned' && user && (
+              {game.status === 'owned' && libraryMode !== null && (
                 <button
                   onClick={handleRemoveGame}
-                  disabled={!isOnline}
+                  disabled={!canEdit}
                   className="hidden w-full py-2 text-center text-xs font-bold text-[#ff336d] hover:underline disabled:opacity-50 disabled:no-underline lg:block"
                 >
                   Remove game
@@ -593,7 +586,7 @@ export default function GameDetailPage() {
                       className="p-3 rounded-2xl border flex items-center justify-between"
                     >
                       <span className="text-xs font-semibold">{exp.title}</span>
-                      {user && isOnline ? (
+                      {canEdit ? (
                         <button
                           type="button"
                           onClick={() => handleToggleExpansion(exp)}
@@ -641,7 +634,7 @@ export default function GameDetailPage() {
               </div>
               {game.status === 'owned' && (
                 <button
-                  disabled={!canEditPlays || !isOnline}
+                  disabled={!canEdit}
                   title={logPlayDisabledReason}
                   onClick={handleStartNewPlay}
                   style={{
@@ -668,7 +661,7 @@ export default function GameDetailPage() {
                   </label>
                   <input
                     type="date"
-                    disabled={!isOnline}
+                    disabled={!canEdit}
                     value={playDate}
                     onChange={(e) => setPlayDate(e.target.value)}
                     style={{
@@ -685,7 +678,7 @@ export default function GameDetailPage() {
                   </label>
                   <div className="flex items-center gap-3">
                     <button
-                      disabled={!isOnline}
+                      disabled={!canEdit}
                       onClick={() => setPlayerCount(Math.max(1, playerCount - 1))}
                       style={{ backgroundColor: 'var(--bg-surface-elevated)' }}
                       className="w-8 h-8 rounded-xl flex items-center justify-center font-bold active:scale-95 disabled:opacity-40"
@@ -694,7 +687,7 @@ export default function GameDetailPage() {
                     </button>
                     <span className="font-display text-lg font-bold">{playerCount}</span>
                     <button
-                      disabled={!isOnline}
+                      disabled={!canEdit}
                       onClick={() => setPlayerCount(playerCount + 1)}
                       style={{ backgroundColor: 'var(--bg-surface-elevated)' }}
                       className="w-8 h-8 rounded-xl flex items-center justify-center font-bold active:scale-95 disabled:opacity-40"
@@ -724,7 +717,7 @@ export default function GameDetailPage() {
                             return next;
                           })
                         }
-                        disabled={!isOnline}
+                        disabled={!canEdit}
                       />
                     </div>
                   ))}
@@ -736,7 +729,7 @@ export default function GameDetailPage() {
                   </label>
                   <textarea
                     rows={2}
-                    disabled={!isOnline}
+                    disabled={!canEdit}
                     placeholder="Who won, scores, house rules..."
                     value={playNotes}
                     onChange={(e) => setPlayNotes(e.target.value)}
@@ -764,7 +757,7 @@ export default function GameDetailPage() {
                   </button>
                   <button
                     onClick={handleSavePlay}
-                    disabled={isSavingPlay || !isOnline}
+                    disabled={isSavingPlay || !canEdit}
                     className="flex-1 py-2.5 rounded-xl bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black text-xs font-bold shadow-md active:scale-95 transition-transform disabled:opacity-50"
                   >
                     {isSavingPlay ? 'Saving...' : editingPlayId ? 'Save changes' : 'Save play'}
@@ -806,7 +799,7 @@ export default function GameDetailPage() {
                         </p>
                       )}
                     </div>
-                    {user && isOnline && (
+                    {canEdit && (
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleEditPlay(play)}
@@ -886,7 +879,7 @@ export default function GameDetailPage() {
                 <button
                   type="button"
                   onClick={() => setIsMoveToCollectionOpen(true)}
-                  disabled={!user || isAuthLoading || !isOnline}
+                  disabled={!canEdit}
                   className="w-full h-11 rounded-xl bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black font-bold text-xs flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <BookIcon size={15} />
@@ -895,23 +888,21 @@ export default function GameDetailPage() {
                 <button
                   type="button"
                   onClick={handleRemoveGame}
-                  disabled={!user || isAuthLoading || !isOnline}
+                  disabled={!canEdit}
                   className="w-full py-2 text-center text-xs font-bold text-[#ff336d] hover:underline disabled:opacity-50 disabled:no-underline"
                 >
                   Remove from Wanted
                 </button>
-                {!user && (
+                {libraryMode === 'live' && !isOnline && (
                   <p className="text-center text-[11px] text-[var(--text-muted)]">
-                    {isDemo
-                      ? 'Managing the wanted list isn’t available in the demo yet.'
-                      : 'Sign in to manage your wanted list.'}
+                    Connect to manage your wanted list.
                   </p>
                 )}
               </div>
-            ) : user && (
+            ) : libraryMode !== null && (
               <button
                 onClick={handleRemoveGame}
-                disabled={!isOnline}
+                disabled={!canEdit}
               className="w-full text-center text-xs font-bold text-[#ff336d] py-2 hover:underline disabled:opacity-50 disabled:no-underline"
               >
                 Remove game
@@ -928,8 +919,8 @@ export default function GameDetailPage() {
         onClose={() => setIsMoveToCollectionOpen(false)}
         onMoveToCollection={handleMoveToCollection}
         onRemoveFromWanted={handleRemoveGame}
-        canManage={Boolean(user) && !isAuthLoading}
-        isOnline={isOnline}
+        canManage={libraryMode !== null}
+        isOnline={canEdit}
         showRemoveFromWanted={false}
       />
     </div>

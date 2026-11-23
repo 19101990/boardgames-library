@@ -8,10 +8,10 @@ import { FilterSortSheet } from '@/components/games/FilterSortSheet';
 import { AuthControl } from '@/components/auth/AuthControl';
 import { useSupabaseAuth } from '@/lib/useSupabaseAuth';
 import { cacheGame, cacheGameDetails } from '@/lib/offlineGameStore';
-import { getLibraryMode, loadLibrary } from '@/lib/libraryData';
+import { addGame, getLibraryMode, loadLibrary } from '@/lib/libraryData';
 import { DemoNotice } from '@/components/demo/DemoNotice';
 import { useOnlineStatus } from '@/lib/useOnlineStatus';
-import { BoardGame, Expansion, NewBoardGame } from '@/types/types';
+import { BoardGame, NewBoardGame } from '@/types/types';
 import {
   SunIcon,
   MoonIcon,
@@ -249,12 +249,9 @@ export default function CollectionPage() {
   const wantedCount = games.filter((g) => g.status === 'wishlist').length;
 
   const handleAddNewGame = async (newGame: NewBoardGame, targetStatus: 'owned' | 'wishlist') => {
-    if (!isOnline || !navigator.onLine) {
+    if (!libraryMode) return;
+    if (libraryMode === 'live' && (!isOnline || !navigator.onLine)) {
       alert('Connect to the internet before changing your library.');
-      return;
-    }
-    if (!user) {
-      alert('Please sign in before adding a game.');
       return;
     }
 
@@ -263,10 +260,10 @@ export default function CollectionPage() {
     setGames((prev) => [optimisticGame, ...prev]);
     setActiveTab(targetStatus === 'owned' ? 'collection' : 'wanted');
 
-    // Prepare payload matching the Supabase games table schema
-    const payload = {
-      id: newGame.id,
-      title: newGame.title,
+    // Row matching the Supabase games table schema (the demo stores the same shape)
+    const payload: BoardGame = {
+      id: newGame.id ?? `game-${Date.now()}`,
+      title: newGame.title ?? 'Untitled game',
       bgg_id: newGame.bgg_id ?? null,
       year_published: newGame.year_published ?? null,
       image_url: newGame.image_url ?? null,
@@ -284,41 +281,34 @@ export default function CollectionPage() {
       language: targetStatus === 'owned' ? (newGame.language ?? 'EN') : null,
     };
 
-    const { error } = await supabase.from('games').insert([payload]);
-
-    if (error) {
-      console.error('Error inserting game into Supabase:', error);
-      alert(`Could not save "${newGame.title}" to database: ${error.message}`);
+    let result;
+    try {
+      result = await addGame(libraryMode, payload, newGame.bgg_expansions ?? []);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Could not save "${newGame.title}": ${message}`);
       // Revert optimistic update
       setGames((prev) => prev.filter((game) => game !== optimisticGame));
-    } else {
-      void cacheGame(payload as BoardGame).catch((cacheError: unknown) => {
+      return;
+    }
+
+    // The demo may give the game a different id ("demo-" prefix), so swap in the saved record.
+    const savedGame = result.game;
+    setGames((prev) => prev.map((game) => (game === optimisticGame ? savedGame : game)));
+
+    if (result.expansionError) {
+      alert(`Game saved, but its expansions could not be saved: ${result.expansionError}`);
+    }
+
+    // Only the real collection uses the offline cache; demo data already lives on this device.
+    if (libraryMode === 'live') {
+      void cacheGame(savedGame).catch((cacheError: unknown) => {
         console.error('Could not save the new game for offline use:', cacheError);
       });
-
-      if (newGame.bgg_expansions?.length) {
-        const expansionRows = newGame.bgg_expansions.map((expansion) => ({
-          game_id: newGame.id,
-          title: expansion.title,
-          is_owned: false,
-        }));
-        const { data: savedExpansions, error: expansionError } = await supabase
-          .from('expansions')
-          .insert(expansionRows)
-          .select('*');
-
-        if (expansionError) {
-          console.error('Error inserting BGG expansions into Supabase:', expansionError);
-          alert(`Game saved, but its expansions could not be saved: ${expansionError.message}`);
-        } else {
-          void cacheGameDetails(
-            payload as BoardGame,
-            (savedExpansions ?? []) as Expansion[],
-            [],
-          ).catch((cacheError: unknown) => {
-            console.error('Could not save the new game expansions for offline use:', cacheError);
-          });
-        }
+      if (result.expansions.length > 0) {
+        void cacheGameDetails(savedGame, result.expansions, []).catch((cacheError: unknown) => {
+          console.error('Could not save the new game expansions for offline use:', cacheError);
+        });
       }
     }
   };
@@ -364,8 +354,8 @@ export default function CollectionPage() {
         <button
           type="button"
           onClick={() => setActiveTab('add')}
-          disabled={!user || isAuthLoading || !isOnline}
-          title={!isOnline ? 'Connect to add games' : !user ? 'Sign in to add games' : 'Add a game'}
+          disabled={!libraryMode || !isOnline}
+          title={!isOnline ? 'Connect to add games' : !libraryMode ? 'Checking login status' : 'Add a game'}
           className={`${isDesktop ? '' : 'flex-1'} py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all ${
             activeTab === 'add'
               ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg shadow-[#0e8396]/20 dark:shadow-[#38e1ff]/20'
@@ -658,7 +648,7 @@ export default function CollectionPage() {
           {!isOnline && activeTab !== 'add' && (
             <p className="mb-3 rounded-xl border border-[var(--border-surface)] bg-[var(--bg-surface)] px-3 py-2 text-xs text-[var(--text-muted)]">
               {isDemo
-                ? 'Offline — the demo keeps working from data saved on this device. Searching BoardGameGeek needs internet.'
+                ? 'Offline — the demo keeps working from data saved on this device. Adding new games needs internet.'
                 : 'Offline — showing the saved library. Changes are unavailable.'}
             </p>
           )}
@@ -670,25 +660,11 @@ export default function CollectionPage() {
                   Connect to the internet to add games.
                 </p>
               </div>
-            ) : user ? (
+            ) : libraryMode ? (
               <div className="mx-auto w-full max-w-6xl">
                 <AddGameForm onAddGame={handleAddNewGame} />
               </div>
-            ) : isDemo ? (
-              <div className="py-16 text-center space-y-3">
-                <p className="text-sm font-bold">Adding games isn’t available in the demo yet.</p>
-                <p className="text-xs text-[var(--text-muted)]">
-                  You can browse the demo collection, wanted list and play history.
-                </p>
-              </div>
-            ) : (
-              <div className="py-16 text-center space-y-3">
-                <p className="text-sm font-bold">Sign in to add games.</p>
-                <p className="text-xs text-[var(--text-muted)]">
-                  Use the account icon above to sign in.
-                </p>
-              </div>
-            )
+            ) : null
           ) : isLoading ? (
             <div className="py-28 flex flex-col items-center justify-center gap-3 text-[var(--text-muted)]">
               <div className="w-7 h-7 border-2 border-current border-t-transparent rounded-full animate-spin text-[#0e8396] dark:text-[#38e1ff]" />
