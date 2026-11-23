@@ -8,7 +8,8 @@ import { supabase } from '@/lib/supabase';
 import { useSupabaseAuth } from '@/lib/useSupabaseAuth';
 import { AuthControl } from '@/components/auth/AuthControl';
 import { MoveToCollectionSheet } from '@/components/games/MoveToCollectionSheet';
-import { PlayRatingDisplay, PlayRatingInput, isValidPlayRating } from '@/components/games/PlayRating';
+import { PlayRatingDisplay, PlayRatingInput } from '@/components/games/PlayRating';
+import { PLAY_RATING_ASPECTS, sanitizePlayRatings } from '@/lib/playRatings';
 import {
   cacheGameDetails,
   getCachedGameDetails,
@@ -16,7 +17,7 @@ import {
   removeCachedGame,
 } from '@/lib/offlineGameStore';
 import { useOnlineStatus } from '@/lib/useOnlineStatus';
-import { BoardGame, Expansion, PlaySession } from '@/types/types';
+import { BoardGame, Expansion, PlayRatings, PlaySession } from '@/types/types';
 import {
   UsersIcon,
   ClockIcon,
@@ -78,7 +79,7 @@ export default function GameDetailPage() {
   const [playDate, setPlayDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [playerCount, setPlayerCount] = useState(2);
   const [playNotes, setPlayNotes] = useState('');
-  const [playRating, setPlayRating] = useState<number | null>(null);
+  const [playRatings, setPlayRatings] = useState<PlayRatings>({});
 
   // Fetch game, expansions, and plays from Supabase
   const fetchGameDetails = useCallback(async () => {
@@ -204,7 +205,7 @@ export default function GameDetailPage() {
       play_date: playDate,
       player_count: playerCount,
       notes: playNotes.trim() || null,
-      rating: isValidPlayRating(playRating) ? playRating : null,
+      ratings: sanitizePlayRatings(playRatings),
     };
 
     const result = editingPlayId
@@ -234,7 +235,7 @@ export default function GameDetailPage() {
       setIsLoggingPlay(false);
       setEditingPlayId(null);
       setPlayNotes('');
-      setPlayRating(null);
+      setPlayRatings({});
     }
     setIsSavingPlay(false);
   };
@@ -245,7 +246,7 @@ export default function GameDetailPage() {
     setPlayDate(new Date().toISOString().split('T')[0]);
     setPlayerCount(game.min_players || 2);
     setPlayNotes('');
-    setPlayRating(null);
+    setPlayRatings({});
     setIsLoggingPlay(true);
   };
 
@@ -254,7 +255,7 @@ export default function GameDetailPage() {
     setPlayDate(play.play_date);
     setPlayerCount(play.player_count);
     setPlayNotes(play.notes ?? '');
-    setPlayRating(isValidPlayRating(play.rating) ? play.rating : null);
+    setPlayRatings(sanitizePlayRatings(play.ratings) ?? {});
     setIsLoggingPlay(true);
   };
 
@@ -781,11 +782,30 @@ export default function GameDetailPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-[#536482] dark:text-[#8ba2c4]">
-                    Rating <span className="font-normal opacity-80">(optional)</span>
-                  </span>
-                  <PlayRatingInput value={playRating} onChange={setPlayRating} disabled={!isOnline} />
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold text-[#536482] dark:text-[#8ba2c4]">
+                    Ratings <span className="font-normal opacity-80">(all optional)</span>
+                  </p>
+                  {PLAY_RATING_ASPECTS.map((aspect) => (
+                    <div key={aspect.key} className="flex items-start justify-between gap-3">
+                      <span className="pt-2 text-[11px] font-medium text-[#536482] dark:text-[#8ba2c4]">
+                        {aspect.label}
+                      </span>
+                      <PlayRatingInput
+                        aspect={aspect}
+                        value={playRatings[aspect.key] ?? null}
+                        onChange={(value) =>
+                          setPlayRatings((current) => {
+                            const next = { ...current };
+                            if (value === null) delete next[aspect.key];
+                            else next[aspect.key] = value;
+                            return next;
+                          })
+                        }
+                        disabled={!isOnline}
+                      />
+                    </div>
+                  ))}
                 </div>
 
                 <div>
@@ -856,7 +876,7 @@ export default function GameDetailPage() {
                     <div>
                       <div className="font-bold flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         <span>{play.play_date} · {play.player_count} players</span>
-                        <PlayRatingDisplay value={play.rating} />
+                        <PlayRatingDisplay value={play.ratings?.overall} />
                       </div>
                       {play.notes && (
                         <p className="text-[11px] text-[#536482] dark:text-[#8ba2c4] mt-0.5 font-medium">
