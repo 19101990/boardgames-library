@@ -6,8 +6,18 @@ import {
   getCachedGames,
   isNetworkError,
 } from '@/lib/offlineGameStore';
-import { getDemoGameDetails, getDemoGames } from '@/lib/demoStore';
-import type { BoardGame, Expansion, PlaySession } from '@/types/types';
+import {
+  addDemoGame,
+  deleteDemoGame,
+  deleteDemoPlay,
+  getDemoGameDetails,
+  getDemoGames,
+  newDemoId,
+  putDemoExpansion,
+  putDemoGame,
+  putDemoPlay,
+} from '@/lib/demoStore';
+import type { BggExpansion, BoardGame, Expansion, PlayRatings, PlaySession } from '@/types/types';
 
 /**
  * `live`: the owner's real collection from Supabase (signed in).
@@ -177,6 +187,144 @@ async function loadDemoGameDetails(gameId: string): Promise<GameDetailsLoadResul
 
 export function loadGameDetails(mode: LibraryMode, gameId: string): Promise<GameDetailsLoadResult> {
   return mode === 'demo' ? loadDemoGameDetails(gameId) : loadLiveGameDetails(gameId);
+}
+
+// ---------- Changes ----------
+// Live: writes to Supabase (owner only, online). Demo: writes to this browser's demo storage only.
+// All functions throw an Error with a user-readable message on failure.
+
+export interface PlayChanges {
+  play_date: string;
+  player_count: number;
+  notes: string | null;
+  ratings: PlayRatings | null;
+}
+
+/** Creates a play (existingPlay = null) or updates existingPlay. */
+export async function savePlay(
+  mode: LibraryMode,
+  gameId: string,
+  existingPlay: PlaySession | null,
+  changes: PlayChanges
+): Promise<PlaySession> {
+  if (mode === 'demo') {
+    const play: PlaySession = {
+      id: existingPlay?.id ?? newDemoId('demo-play'),
+      game_id: gameId,
+      ...changes,
+      created_at: existingPlay?.created_at ?? new Date().toISOString(),
+    };
+    await putDemoPlay(play);
+    return play;
+  }
+
+  const playId = existingPlay?.id ?? null;
+  const playChanges = { game_id: gameId, ...changes };
+  const result = playId
+    ? await supabase.from('plays').update(playChanges).eq('id', playId).eq('game_id', gameId).select().single()
+    : await supabase.from('plays').insert([playChanges]).select().single();
+  if (result.error || !result.data) {
+    console.error('Error saving play:', result.error);
+    throw new Error(result.error?.message ?? 'The play was not saved.');
+  }
+  return result.data as PlaySession;
+}
+
+export async function deletePlay(mode: LibraryMode, playId: string): Promise<void> {
+  if (mode === 'demo') return deleteDemoPlay(playId);
+
+  const { error } = await supabase.from('plays').delete().eq('id', playId);
+  if (error) {
+    console.error('Error deleting play:', error);
+    throw new Error(error.message);
+  }
+}
+
+export async function setExpansionOwned(mode: LibraryMode, expansion: Expansion, isOwned: boolean): Promise<void> {
+  if (mode === 'demo') return putDemoExpansion({ ...expansion, is_owned: isOwned });
+
+  const { error } = await supabase.from('expansions').update({ is_owned: isOwned }).eq('id', expansion.id);
+  if (error) {
+    console.error('Error updating expansion:', error);
+    throw new Error(error.message);
+  }
+}
+
+/** Removes a game. In demo mode its plays and expansions are removed with it. */
+export async function removeGame(mode: LibraryMode, gameId: string): Promise<void> {
+  if (mode === 'demo') return deleteDemoGame(gameId);
+
+  const { error } = await supabase.from('games').delete().eq('id', gameId);
+  if (error) {
+    console.error('Error deleting game:', error);
+    throw new Error(error.message);
+  }
+}
+
+export async function moveGameToCollection(mode: LibraryMode, game: BoardGame, language: string): Promise<BoardGame> {
+  const updatedGame: BoardGame = { ...game, status: 'owned', language };
+  if (mode === 'demo') {
+    await putDemoGame(updatedGame);
+    return updatedGame;
+  }
+
+  const { error } = await supabase.from('games').update({ status: 'owned', language }).eq('id', game.id);
+  if (error) {
+    console.error('Error moving game to collection:', error);
+    throw new Error(error.message);
+  }
+  return updatedGame;
+}
+
+export interface AddGameResult {
+  game: BoardGame;
+  expansions: Expansion[];
+  /** Set when the game was saved but its expansions were not (live mode only). */
+  expansionError?: string;
+}
+
+/**
+ * Adds a game (shaped like the Supabase games row) plus its BGG expansions, all not owned.
+ * Demo games get a "demo-" id prefix so they can never collide with real records.
+ */
+export async function addGame(
+  mode: LibraryMode,
+  gameRow: BoardGame,
+  bggExpansions: BggExpansion[]
+): Promise<AddGameResult> {
+  if (mode === 'demo') {
+    const game: BoardGame = {
+      ...gameRow,
+      id: gameRow.id.startsWith('demo-') ? gameRow.id : `demo-${gameRow.id}`,
+      created_at: new Date().toISOString(),
+    };
+    const expansions: Expansion[] = bggExpansions.map((expansion) => ({
+      id: newDemoId('demo-exp'),
+      game_id: game.id,
+      bgg_id: expansion.bgg_id,
+      title: expansion.title,
+      is_owned: false,
+    }));
+    await addDemoGame(game, expansions);
+    return { game, expansions };
+  }
+
+  const { error } = await supabase.from('games').insert([gameRow]);
+  if (error) {
+    console.error('Error inserting game into Supabase:', error);
+    throw new Error(error.message);
+  }
+  if (bggExpansions.length === 0) return { game: gameRow, expansions: [] };
+
+  const { data, error: expansionError } = await supabase
+    .from('expansions')
+    .insert(bggExpansions.map((expansion) => ({ game_id: gameRow.id, title: expansion.title, is_owned: false })))
+    .select('*');
+  if (expansionError) {
+    console.error('Error inserting BGG expansions into Supabase:', expansionError);
+    return { game: gameRow, expansions: [], expansionError: expansionError.message };
+  }
+  return { game: gameRow, expansions: (data ?? []) as Expansion[] };
 }
 
 /** Decides which data a page shows. null while the login state is still being restored. */

@@ -138,6 +138,86 @@ export async function getDemoGames(): Promise<BoardGame[]> {
   }
 }
 
+// ---------- Writes (demo changes stay in this browser only) ----------
+
+async function withWriteTransaction(
+  storeNames: string[],
+  work: (transaction: IDBTransaction) => void | Promise<void>
+): Promise<void> {
+  await ensureDemoSeeded();
+  const database = await openDatabase();
+  try {
+    const transaction = database.transaction(storeNames, 'readwrite');
+    const done = waitForTransaction(transaction);
+    try {
+      await work(transaction);
+    } catch (error) {
+      transaction.abort();
+      await done.catch(() => undefined);
+      throw error;
+    }
+    await done;
+  } finally {
+    database.close();
+  }
+}
+
+export function newDemoId(prefix: string): string {
+  const unique =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `${prefix}-${unique}`;
+}
+
+export function putDemoPlay(play: PlaySession): Promise<void> {
+  return withWriteTransaction([PLAYS_STORE], (transaction) => {
+    transaction.objectStore(PLAYS_STORE).put(play);
+  });
+}
+
+export function deleteDemoPlay(playId: string): Promise<void> {
+  return withWriteTransaction([PLAYS_STORE], (transaction) => {
+    transaction.objectStore(PLAYS_STORE).delete(playId);
+  });
+}
+
+export function putDemoExpansion(expansion: Expansion): Promise<void> {
+  return withWriteTransaction([EXPANSIONS_STORE], (transaction) => {
+    transaction.objectStore(EXPANSIONS_STORE).put(expansion);
+  });
+}
+
+export function putDemoGame(game: BoardGame): Promise<void> {
+  return withWriteTransaction([GAMES_STORE], (transaction) => {
+    transaction.objectStore(GAMES_STORE).put(game);
+  });
+}
+
+/** Adds a game and its expansions. Fails if a game with the same id is already in the demo. */
+export function addDemoGame(game: BoardGame, expansions: Expansion[]): Promise<void> {
+  return withWriteTransaction([GAMES_STORE, EXPANSIONS_STORE], async (transaction) => {
+    const existing = await requestResult(transaction.objectStore(GAMES_STORE).getKey(game.id));
+    if (existing !== undefined) {
+      throw new Error(`"${game.title}" is already in the demo collection or wanted list.`);
+    }
+    transaction.objectStore(GAMES_STORE).add(game);
+    expansions.forEach((expansion) => transaction.objectStore(EXPANSIONS_STORE).put(expansion));
+  });
+}
+
+/** Removes a game together with its plays and expansions. */
+export function deleteDemoGame(gameId: string): Promise<void> {
+  return withWriteTransaction([GAMES_STORE, EXPANSIONS_STORE, PLAYS_STORE], async (transaction) => {
+    transaction.objectStore(GAMES_STORE).delete(gameId);
+    for (const storeName of [EXPANSIONS_STORE, PLAYS_STORE]) {
+      const store = transaction.objectStore(storeName);
+      const keys = await requestResult(store.index('game_id').getAllKeys(gameId));
+      keys.forEach((key) => store.delete(key));
+    }
+  });
+}
+
 export async function getDemoGameDetails(gameId: string): Promise<DemoGameDetails> {
   await ensureDemoSeeded();
   const database = await openDatabase();
