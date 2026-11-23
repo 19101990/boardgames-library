@@ -26,6 +26,8 @@ export interface PlaySession {
   play_date: string;
   player_count: number;
   notes?: string | null;
+  /** Optional 1–5 star rating for this session; separate from the game's BGG rating. */
+  rating?: number | null;
   created_at?: string;
 }
 

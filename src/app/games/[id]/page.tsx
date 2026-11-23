@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useSupabaseAuth } from '@/lib/useSupabaseAuth';
 import { AuthControl } from '@/components/auth/AuthControl';
 import { MoveToCollectionSheet } from '@/components/games/MoveToCollectionSheet';
+import { PlayRatingDisplay, PlayRatingInput, isValidPlayRating } from '@/components/games/PlayRating';
 import {
   cacheGameDetails,
   getCachedGameDetails,
@@ -77,6 +78,7 @@ export default function GameDetailPage() {
   const [playDate, setPlayDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [playerCount, setPlayerCount] = useState(2);
   const [playNotes, setPlayNotes] = useState('');
+  const [playRating, setPlayRating] = useState<number | null>(null);
 
   // Fetch game, expansions, and plays from Supabase
   const fetchGameDetails = useCallback(async () => {
@@ -202,6 +204,7 @@ export default function GameDetailPage() {
       play_date: playDate,
       player_count: playerCount,
       notes: playNotes.trim() || null,
+      rating: isValidPlayRating(playRating) ? playRating : null,
     };
 
     const result = editingPlayId
@@ -231,8 +234,19 @@ export default function GameDetailPage() {
       setIsLoggingPlay(false);
       setEditingPlayId(null);
       setPlayNotes('');
+      setPlayRating(null);
     }
     setIsSavingPlay(false);
+  };
+
+  const handleStartNewPlay = () => {
+    if (!canViewPlays || !game) return;
+    setEditingPlayId(null);
+    setPlayDate(new Date().toISOString().split('T')[0]);
+    setPlayerCount(game.min_players || 2);
+    setPlayNotes('');
+    setPlayRating(null);
+    setIsLoggingPlay(true);
   };
 
   const handleEditPlay = (play: PlaySession) => {
@@ -240,6 +254,7 @@ export default function GameDetailPage() {
     setPlayDate(play.play_date);
     setPlayerCount(play.player_count);
     setPlayNotes(play.notes ?? '');
+    setPlayRating(isValidPlayRating(play.rating) ? play.rating : null);
     setIsLoggingPlay(true);
   };
 
@@ -399,14 +414,7 @@ export default function GameDetailPage() {
     <button
       disabled={!canViewPlays || !isOnline}
       title={!canViewPlays ? 'Sign in to log a play' : !isOnline ? 'Connect to log a play' : undefined}
-      onClick={() => {
-        if (!canViewPlays) return;
-        setEditingPlayId(null);
-        setPlayDate(new Date().toISOString().split('T')[0]);
-        setPlayerCount(game.min_players || 2);
-        setPlayNotes('');
-        setIsLoggingPlay(true);
-      }}
+      onClick={handleStartNewPlay}
       className="w-full h-12 rounded-2xl bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black font-display font-black text-sm flex items-center justify-center gap-2.5 shadow-lg active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
     >
       <DiceIcon size={18} />
@@ -712,9 +720,7 @@ export default function GameDetailPage() {
                 <button
                   disabled={!canViewPlays || !isOnline}
                   title={!canViewPlays ? 'Sign in to log a play' : !isOnline ? 'Connect to log a play' : undefined}
-                  onClick={() => {
-                    if (canViewPlays) setIsLoggingPlay(true);
-                  }}
+                  onClick={handleStartNewPlay}
                   style={{
                     backgroundColor: 'var(--bg-surface-elevated)',
                     borderColor: 'var(--border-surface-elevated)',
@@ -773,6 +779,13 @@ export default function GameDetailPage() {
                       <PlusIcon size={14} />
                     </button>
                   </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-[#536482] dark:text-[#8ba2c4]">
+                    Rating <span className="font-normal opacity-80">(optional)</span>
+                  </span>
+                  <PlayRatingInput value={playRating} onChange={setPlayRating} disabled={!isOnline} />
                 </div>
 
                 <div>
@@ -841,8 +854,9 @@ export default function GameDetailPage() {
                     className="p-3 rounded-2xl border flex items-center justify-between text-xs"
                   >
                     <div>
-                      <div className="font-bold">
-                        {play.play_date} · {play.player_count} players
+                      <div className="font-bold flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <span>{play.play_date} · {play.player_count} players</span>
+                        <PlayRatingDisplay value={play.rating} />
                       </div>
                       {play.notes && (
                         <p className="text-[11px] text-[#536482] dark:text-[#8ba2c4] mt-0.5 font-medium">
