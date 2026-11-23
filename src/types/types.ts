@@ -20,14 +20,23 @@ export type NewBoardGame = Partial<BoardGame> & {
   bgg_expansions?: BggExpansion[];
 };
 
+export type PlayRatingAspect =
+  | 'overall' // overall enjoyment, more = better
+  | 'pacing' // length / pacing fit, more = better fit
+  | 'energy_fit' // energy / mood fit, more = better fit
+  | 'interaction' // player interaction, more = more interaction
+  | 'teach_effort'; // teach / rules effort, more = harder
+
+/** Optional 1–5 ratings for one play session; separate from the game's BGG rating. */
+export type PlayRatings = Partial<Record<PlayRatingAspect, number>>;
+
 export interface PlaySession {
   id: string;
   game_id: string;
   play_date: string;
   player_count: number;
   notes?: string | null;
-  /** Optional 1–5 star rating for this session; separate from the game's BGG rating. */
-  rating?: number | null;
+  ratings?: PlayRatings | null;
   created_at?: string;
 }
 
