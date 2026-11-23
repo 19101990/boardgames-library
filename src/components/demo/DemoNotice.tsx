@@ -7,7 +7,8 @@ export function DemoNotice({ className = '' }: DemoNoticeProps) {
   return (
     <p
       role="note"
-      className={`rounded-xl border border-[#a2d8e2] bg-[#e2f4f7] px-3 py-2 text-xs text-[#0e6f80] dark:border-[#1f4a5a] dark:bg-[#0b1f2a] dark:text-[#8fe6f7] ${className}`}
+      // Colours live in globals.css (.demo-notice / .dark .demo-notice) so they follow the app's theme toggle.
+      className={`demo-notice rounded-xl border px-3 py-2 text-xs ${className}`}
     >
       <span className="font-bold">Demo collection</span> · changes are saved only on this device
     </p>
