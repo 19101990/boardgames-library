@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { XMLParser } from 'fast-xml-parser';
+import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities';
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -18,15 +19,15 @@ function asRecords(value: unknown): XmlRecord[] {
 function attribute(record: unknown, name: string): string | undefined {
   if (typeof record !== 'object' || record === null) return undefined;
   const value = (record as XmlRecord)[`@_${name}`];
-  return typeof value === 'string' || typeof value === 'number' ? String(value) : undefined;
+  return typeof value === 'string' || typeof value === 'number' ? decodeHtmlEntities(String(value)) : undefined;
 }
 
 function childText(record: XmlRecord, name: string): string | undefined {
   const value = record[name];
-  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  if (typeof value === 'string' || typeof value === 'number') return decodeHtmlEntities(String(value));
   if (typeof value === 'object' && value !== null && '#text' in value) {
     const text = (value as XmlRecord)['#text'];
-    return typeof text === 'string' || typeof text === 'number' ? String(text) : undefined;
+    return typeof text === 'string' || typeof text === 'number' ? decodeHtmlEntities(String(text)) : undefined;
   }
   return undefined;
 }

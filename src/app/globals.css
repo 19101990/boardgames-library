@@ -50,6 +50,18 @@
   color: #8bdced;
 }
 
+.demo-notice {
+  background-color: #e2f4f7;
+  border-color: #a2d8e2;
+  color: #0e6f80;
+}
+
+.dark .demo-notice {
+  background-color: var(--bg-app);
+  border-color: #184657;
+  color: #8bdced;
+}
+
 .dark input[type="date"] {
   color-scheme: dark;
 }

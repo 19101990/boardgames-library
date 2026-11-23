@@ -1,4 +1,4 @@
-const SHELL_CACHE = 'boardgames-library-shell-v2';
+const SHELL_CACHE = 'boardgames-library-shell-v3';
 const IMAGE_CACHE = 'boardgames-library-images-v1';
 const APP_SHELL = [
   '/',
