@@ -10,12 +10,9 @@ import { AuthControl } from '@/components/auth/AuthControl';
 import { MoveToCollectionSheet } from '@/components/games/MoveToCollectionSheet';
 import { PlayRatingDisplay, PlayRatingInput } from '@/components/games/PlayRating';
 import { PLAY_RATING_ASPECTS, sanitizePlayRatings } from '@/lib/playRatings';
-import {
-  cacheGameDetails,
-  getCachedGameDetails,
-  isNetworkError,
-  removeCachedGame,
-} from '@/lib/offlineGameStore';
+import { cacheGameDetails, removeCachedGame } from '@/lib/offlineGameStore';
+import { getLibraryMode, loadGameDetails } from '@/lib/libraryData';
+import { DemoNotice } from '@/components/demo/DemoNotice';
 import { useOnlineStatus } from '@/lib/useOnlineStatus';
 import { BoardGame, Expansion, PlayRatings, PlaySession } from '@/types/types';
 import {
@@ -35,7 +32,12 @@ import {
 
 export default function GameDetailPage() {
   const { user, isLoading: isAuthLoading, errorMessage: authError } = useSupabaseAuth();
-  const canViewPlays = Boolean(user) && !isAuthLoading;
+  const libraryMode = getLibraryMode(isAuthLoading, Boolean(user));
+  const isDemo = libraryMode === 'demo';
+  // Signed in: the owner's real plays. Signed out: the demo's sample plays.
+  const canViewPlays = libraryMode !== null;
+  // Demo editing arrives with local demo storage; until then only the signed-in owner can edit.
+  const canEditPlays = libraryMode === 'live';
   const { isOnline, setIsOnline } = useOnlineStatus();
   const params = useParams();
   const router = useRouter();
@@ -81,115 +83,26 @@ export default function GameDetailPage() {
   const [playNotes, setPlayNotes] = useState('');
   const [playRatings, setPlayRatings] = useState<PlayRatings>({});
 
-  // Fetch game, expansions, and plays from Supabase
+  // Load the game with its expansions and plays: real data (signed in) or demo data (signed out).
   const fetchGameDetails = useCallback(async () => {
-    if (!rawId) return;
+    if (!rawId || !libraryMode) return; // wait until the login state is known
     setIsLoading(true);
     setOfflineCacheMiss(false);
-    if (!canViewPlays) {
-      setPlays([]);
+    if (libraryMode !== 'live') {
       setIsLoggingPlay(false);
       setEditingPlayId(null);
     }
 
-    const loadCachedDetails = async () => {
-      try {
-        const cached = await getCachedGameDetails(rawId);
-        setGame(cached.game);
-        setExpansions(cached.expansions);
-        setPlays(canViewPlays ? cached.plays : []);
-        setHasCachedDetailLists(cached.hasCachedDetails);
-        setOfflineCacheMiss(!cached.game);
-        if (cached.game) setPlayerCount(cached.game.min_players || 2);
-      } catch (error) {
-        console.error('Could not load saved game details:', error);
-        setGame(null);
-        setExpansions([]);
-        setPlays([]);
-        setHasCachedDetailLists(false);
-        setOfflineCacheMiss(true);
-      }
-    };
-
-    try {
-      if (!navigator.onLine) {
-        setIsOnline(false);
-        await loadCachedDetails();
-        return;
-      }
-
-      // 1. Fetch Game
-      const { data: gameData, error: gameError } = await supabase
-        .from('games')
-        .select('*')
-        .eq('id', rawId)
-        .single();
-
-      if (gameError || !gameData) {
-        console.error('Error fetching game:', gameError);
-        if (isNetworkError(gameError)) {
-          setIsOnline(false);
-          await loadCachedDetails();
-        } else {
-          setGame(null);
-          setExpansions([]);
-          setPlays([]);
-          setHasCachedDetailLists(false);
-        }
-        return;
-      }
-
-      setGame(gameData as BoardGame);
-      setIsOnline(true);
-      setPlayerCount(gameData.min_players || 2);
-
-      const [expansionsResult, playsResult] = await Promise.all([
-        supabase
-          .from('expansions')
-          .select('*')
-          .eq('game_id', rawId)
-          .order('title', { ascending: true }),
-        canViewPlays
-          ? supabase
-              .from('plays')
-              .select('*')
-              .eq('game_id', rawId)
-              .order('play_date', { ascending: false })
-          : Promise.resolve(null),
-      ]);
-
-      if (expansionsResult.error || playsResult?.error) {
-        const requestError = expansionsResult.error ?? playsResult?.error;
-        console.error('Could not fetch game history:', requestError);
-
-        if (isNetworkError(requestError)) {
-          setIsOnline(false);
-          await loadCachedDetails();
-          setGame(gameData as BoardGame);
-          return;
-        }
-      }
-
-      const expansions = (expansionsResult.data ?? []) as Expansion[];
-      const plays = (playsResult?.data ?? []) as PlaySession[];
-      setExpansions(expansions);
-      setPlays(plays);
-      setHasCachedDetailLists(!expansionsResult.error && !playsResult?.error);
-      if (canViewPlays && !expansionsResult.error && !playsResult?.error) {
-        void cacheGameDetails(gameData as BoardGame, expansions, plays).catch((cacheError: unknown) => {
-          console.error('Could not save game details for offline use:', cacheError);
-        });
-      }
-    } catch (err) {
-      console.error('Failed to load game details:', err);
-      if (isNetworkError(err)) {
-        setIsOnline(false);
-        await loadCachedDetails();
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [canViewPlays, rawId, setIsOnline]);
+    const result = await loadGameDetails(libraryMode, rawId);
+    setGame(result.game);
+    setExpansions(result.expansions);
+    setPlays(result.plays);
+    setHasCachedDetailLists(result.hasCachedDetailLists);
+    setOfflineCacheMiss(result.offlineCacheMiss);
+    if (result.game) setPlayerCount(result.game.min_players || 2);
+    if (result.isOffline !== undefined) setIsOnline(!result.isOffline);
+    setIsLoading(false);
+  }, [libraryMode, rawId, setIsOnline]);
 
   useEffect(() => {
     fetchGameDetails();
@@ -240,8 +153,16 @@ export default function GameDetailPage() {
     setIsSavingPlay(false);
   };
 
+  const logPlayDisabledReason = isDemo
+    ? 'Logging plays isn’t available in the demo yet'
+    : !canEditPlays
+      ? 'Sign in to log a play'
+      : !isOnline
+        ? 'Connect to log a play'
+        : undefined;
+
   const handleStartNewPlay = () => {
-    if (!canViewPlays || !game) return;
+    if (!canEditPlays || !game) return;
     setEditingPlayId(null);
     setPlayDate(new Date().toISOString().split('T')[0]);
     setPlayerCount(game.min_players || 2);
@@ -413,8 +334,8 @@ export default function GameDetailPage() {
   );
   const actionButton = game.status === 'owned' ? (
     <button
-      disabled={!canViewPlays || !isOnline}
-      title={!canViewPlays ? 'Sign in to log a play' : !isOnline ? 'Connect to log a play' : undefined}
+      disabled={!canEditPlays || !isOnline}
+      title={logPlayDisabledReason}
       onClick={handleStartNewPlay}
       className="w-full h-12 rounded-2xl bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black font-display font-black text-sm flex items-center justify-center gap-2.5 shadow-lg active:scale-[0.98] transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
     >
@@ -599,7 +520,8 @@ export default function GameDetailPage() {
 
         {/* Content Body */}
         <div className="p-5 space-y-6 lg:col-start-2 lg:col-span-2 lg:p-0 lg:space-y-8">
-          {!isOnline && (
+          {isDemo && <DemoNotice />}
+          {!isOnline && !isDemo && (
             <p className="rounded-xl border border-[var(--border-surface)] bg-[var(--bg-surface)] px-3 py-2 text-xs text-[var(--text-muted)]">
               Offline — showing saved game information. It may be out of date; changes are unavailable.
             </p>
@@ -719,8 +641,8 @@ export default function GameDetailPage() {
               </div>
               {game.status === 'owned' && (
                 <button
-                  disabled={!canViewPlays || !isOnline}
-                  title={!canViewPlays ? 'Sign in to log a play' : !isOnline ? 'Connect to log a play' : undefined}
+                  disabled={!canEditPlays || !isOnline}
+                  title={logPlayDisabledReason}
                   onClick={handleStartNewPlay}
                   style={{
                     backgroundColor: 'var(--bg-surface-elevated)',
@@ -980,7 +902,9 @@ export default function GameDetailPage() {
                 </button>
                 {!user && (
                   <p className="text-center text-[11px] text-[var(--text-muted)]">
-                    Sign in to manage your wanted list.
+                    {isDemo
+                      ? 'Managing the wanted list isn’t available in the demo yet.'
+                      : 'Sign in to manage your wanted list.'}
                   </p>
                 )}
               </div>

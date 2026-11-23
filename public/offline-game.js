@@ -45,6 +45,44 @@ function readSavedGame(gameId) {
   });
 }
 
+// Demo games (ids starting with "demo-") live in a separate database; see src/lib/demoStore.ts.
+const DEMO_DATABASE_NAME = 'boardgames-library-demo';
+const DEMO_STORES = ['games', 'expansions', 'plays'];
+
+function readDemoGame(gameId) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DEMO_DATABASE_NAME);
+    request.onerror = () => reject(request.error || new Error('Could not open demo storage.'));
+    request.onsuccess = () => {
+      const database = request.result;
+      if (!DEMO_STORES.every((storeName) => database.objectStoreNames.contains(storeName))) {
+        database.close();
+        resolve({ game: null, details: null });
+        return;
+      }
+
+      const transaction = database.transaction(DEMO_STORES, 'readonly');
+      const gameRequest = transaction.objectStore('games').get(gameId);
+      const expansionsRequest = transaction.objectStore('expansions').index('game_id').getAll(gameId);
+      const playsRequest = transaction.objectStore('plays').index('game_id').getAll(gameId);
+
+      transaction.oncomplete = () => {
+        database.close();
+        const expansions = (expansionsRequest.result || []).sort((a, b) => a.title.localeCompare(b.title));
+        const plays = (playsRequest.result || []).sort((a, b) => b.play_date.localeCompare(a.play_date));
+        resolve({
+          game: gameRequest.result || null,
+          details: { expansions, plays, has_cached_details: true },
+        });
+      };
+      transaction.onerror = () => {
+        database.close();
+        reject(transaction.error || new Error('Could not read demo game.'));
+      };
+    };
+  });
+}
+
 function setText(id, value) {
   document.getElementById(id).textContent = value == null ? '' : String(value);
 }
@@ -136,7 +174,10 @@ function renderGame(game, details) {
   setList(
     'plays',
     details && Array.isArray(details.plays) ? details.plays : [],
-    (play) => `${play.play_date} · ${play.player_count} players${play.notes ? ` · ${play.notes}` : ''}`
+    (play) => {
+      const overall = play.ratings && play.ratings.overall;
+      return `${play.play_date} · ${play.player_count} players${overall ? ` · ${'★'.repeat(overall)}${'☆'.repeat(5 - overall)}` : ''}${play.notes ? ` · ${play.notes}` : ''}`;
+    }
   );
 
   document.getElementById('loading').hidden = true;
@@ -148,7 +189,7 @@ async function loadGame() {
   const gameId = decodeURIComponent(window.location.pathname.split('/').filter(Boolean).pop() || '');
 
   try {
-    const saved = await readSavedGame(gameId);
+    const saved = gameId.startsWith('demo-') ? await readDemoGame(gameId) : await readSavedGame(gameId);
     if (saved.game) {
       renderGame(saved.game, saved.details);
       return;

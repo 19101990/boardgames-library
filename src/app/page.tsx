@@ -7,13 +7,9 @@ import { AddGameForm } from '@/components/games/AddGameForm';
 import { FilterSortSheet } from '@/components/games/FilterSortSheet';
 import { AuthControl } from '@/components/auth/AuthControl';
 import { useSupabaseAuth } from '@/lib/useSupabaseAuth';
-import {
-  cacheGame,
-  cacheGameDetails,
-  cacheGames,
-  getCachedGames,
-  isNetworkError,
-} from '@/lib/offlineGameStore';
+import { cacheGame, cacheGameDetails } from '@/lib/offlineGameStore';
+import { getLibraryMode, loadLibrary } from '@/lib/libraryData';
+import { DemoNotice } from '@/components/demo/DemoNotice';
 import { useOnlineStatus } from '@/lib/useOnlineStatus';
 import { BoardGame, Expansion, NewBoardGame } from '@/types/types';
 import {
@@ -43,78 +39,21 @@ export default function CollectionPage() {
   const [isRefreshingBgg, setIsRefreshingBgg] = useState(false);
   const [bggRefreshProgress, setBggRefreshProgress] = useState<string | null>(null);
 
-  // Fetch games from Supabase
+  const libraryMode = getLibraryMode(isAuthLoading, Boolean(user));
+  const isDemo = libraryMode === 'demo';
+
+  // Load the real collection (signed in) or the demo collection (signed out).
   const fetchGames = useCallback(async () => {
+    if (!libraryMode) return; // wait until the login state is known
     setIsLoading(true);
     setErrorMessage(null);
 
-    if (!navigator.onLine) {
-      setIsOnline(false);
-      try {
-        const cachedGames = await getCachedGames();
-        setGames(cachedGames);
-        if (cachedGames.length === 0) {
-          setErrorMessage('No saved library is available offline yet. Connect to load it.');
-        }
-      } catch (error) {
-        console.error('Could not load the saved library:', error);
-        setErrorMessage('Could not read the saved library on this device.');
-      }
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('games')
-        .select('*')
-        .order('title', { ascending: true });
-
-      if (error) {
-        console.error('Error fetching games from Supabase:', error);
-        if (isNetworkError(error)) {
-          setIsOnline(false);
-          const cachedGames = await getCachedGames();
-          setGames(cachedGames);
-          setErrorMessage(
-            cachedGames.length === 0
-              ? 'No saved library is available offline yet. Connect to load it.'
-              : null
-          );
-        } else {
-          setErrorMessage(error.message);
-        }
-      } else if (data) {
-        const fetchedGames = data as BoardGame[];
-        setGames(fetchedGames);
-        setIsOnline(true);
-        void cacheGames(fetchedGames).catch((cacheError: unknown) => {
-          console.error('Could not save the library for offline use:', cacheError);
-        });
-      }
-    } catch (error) {
-      console.error('Failed to fetch games:', error);
-      if (isNetworkError(error)) {
-        setIsOnline(false);
-        try {
-          const cachedGames = await getCachedGames();
-          setGames(cachedGames);
-          setErrorMessage(
-            cachedGames.length === 0
-              ? 'No saved library is available offline yet. Connect to load it.'
-              : null
-          );
-        } catch (cacheError) {
-          console.error('Could not load the saved library:', cacheError);
-          setErrorMessage('Could not read the saved library on this device.');
-        }
-      } else {
-        setErrorMessage('Could not load the library. Please try again.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [setIsOnline]);
+    const result = await loadLibrary(libraryMode);
+    setGames(result.games);
+    setErrorMessage(result.errorMessage);
+    if (result.isOffline !== undefined) setIsOnline(!result.isOffline);
+    setIsLoading(false);
+  }, [libraryMode, setIsOnline]);
 
   useEffect(() => {
     fetchGames();
@@ -715,9 +654,12 @@ export default function CollectionPage() {
 
         {/* Content Body */}
         <main className="px-5 pt-3 flex-1 md:px-8 md:pt-5">
+          {isDemo && <DemoNotice className="mb-3" />}
           {!isOnline && activeTab !== 'add' && (
             <p className="mb-3 rounded-xl border border-[var(--border-surface)] bg-[var(--bg-surface)] px-3 py-2 text-xs text-[var(--text-muted)]">
-              Offline — showing the saved library. Changes are unavailable.
+              {isDemo
+                ? 'Offline — the demo keeps working from data saved on this device. Searching BoardGameGeek needs internet.'
+                : 'Offline — showing the saved library. Changes are unavailable.'}
             </p>
           )}
           {activeTab === 'add' ? (
@@ -731,6 +673,13 @@ export default function CollectionPage() {
             ) : user ? (
               <div className="mx-auto w-full max-w-6xl">
                 <AddGameForm onAddGame={handleAddNewGame} />
+              </div>
+            ) : isDemo ? (
+              <div className="py-16 text-center space-y-3">
+                <p className="text-sm font-bold">Adding games isn’t available in the demo yet.</p>
+                <p className="text-xs text-[var(--text-muted)]">
+                  You can browse the demo collection, wanted list and play history.
+                </p>
               </div>
             ) : (
               <div className="py-16 text-center space-y-3">
