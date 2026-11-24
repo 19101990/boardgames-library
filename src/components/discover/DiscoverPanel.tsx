@@ -153,11 +153,12 @@ export function DiscoverPanel({ games, libraryMode, isOnline, onAddToWanted }: D
   const loadingText = [...LOADING_STEPS].reverse().find((step) => secondsWaiting >= step.fromSecond)?.text;
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-5">
-      {/* Choices */}
+    // Phones: one column. Desktop (lg+): choices and results side by side, half and half.
+    <div className="w-full space-y-5 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0">
+      {/* Choices (stays in view while scrolling the results on desktop) */}
       <section
         style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-surface)' }}
-        className="rounded-3xl border p-4 space-y-4 md:p-5"
+        className="rounded-3xl border p-4 space-y-4 md:p-5 lg:sticky lg:top-6"
       >
         <p className="text-sm text-[var(--text-muted)]">
           Get 5 game ideas based on the games you rated highest. The AI suggests them, then every idea is
@@ -238,7 +239,7 @@ export function DiscoverPanel({ games, libraryMode, isOnline, onAddToWanted }: D
           type="button"
           onClick={handleDiscover}
           disabled={isRequesting || favourites.length === 0}
-          className="w-full h-12 rounded-2xl bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black font-black text-sm tracking-wide shadow-lg active:scale-[0.98] transition-transform flex items-center justify-center gap-2 disabled:opacity-50 disabled:active:scale-100 md:w-auto md:px-8"
+          className="w-full h-12 rounded-2xl bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black font-black text-sm tracking-wide shadow-lg active:scale-[0.98] transition-transform flex items-center justify-center gap-2 disabled:opacity-50 disabled:active:scale-100 md:w-auto md:px-8 lg:w-full"
         >
           <SparklesIcon size={16} />
           {isRequesting ? 'Finding games…' : results ? 'Suggest again' : 'Suggest games'}
@@ -270,7 +271,7 @@ export function DiscoverPanel({ games, libraryMode, isOnline, onAddToWanted }: D
                 Only {results.length} of the AI’s ideas passed the BoardGameGeek checks this time.
               </p>
             )}
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <div className="flex flex-col gap-3">
               {results.map((suggestion) => (
                 <SuggestionCard
                   key={suggestion.bggId}
@@ -285,7 +286,17 @@ export function DiscoverPanel({ games, libraryMode, isOnline, onAddToWanted }: D
               BoardGameGeek. The “why” is the AI’s opinion and can be wrong.
             </p>
           </div>
-        ) : null}
+        ) : (
+          // Desktop only: fills the empty right column before the first search.
+          <div
+            style={{ borderColor: 'var(--border-surface-elevated)' }}
+            className="hidden lg:flex min-h-[320px] flex-col items-center justify-center gap-2 rounded-3xl border border-dashed p-8 text-center text-[var(--text-muted)]"
+          >
+            <SparklesIcon size={28} className="text-[#0e8396] dark:text-[#38e1ff]" />
+            <p className="text-sm font-semibold">Your 5 suggestions will appear here</p>
+            <p className="text-xs">Pick a player count and style, then press “Suggest games”.</p>
+          </div>
+        )}
       </section>
     </div>
   );
@@ -299,17 +310,18 @@ interface SuggestionCardProps {
 
 function SuggestionCard({ suggestion, addState, onAdd }: SuggestionCardProps) {
   const [imageFailed, setImageFailed] = useState(false);
-  const imageUrl = suggestion.thumbnail ?? suggestion.image;
+  const imageUrl = suggestion.image ?? suggestion.thumbnail;
   const { minPlayers, maxPlayers, minPlaytime, maxPlaytime } = suggestion;
 
+  // Same structure as the collection's list card: picture on the left, details on the right.
   return (
     <article
       style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-surface)' }}
-      className="flex overflow-hidden rounded-2xl border"
+      className="flex w-full overflow-hidden rounded-2xl border"
     >
       <div
         style={{ backgroundColor: 'var(--bg-hero)' }}
-        className="relative w-28 shrink-0 flex items-center justify-center overflow-hidden md:w-36"
+        className="relative w-36 min-h-[140px] shrink-0 flex items-center justify-center overflow-hidden"
       >
         {imageUrl && !imageFailed ? (
           <Image
@@ -321,58 +333,66 @@ function SuggestionCard({ suggestion, addState, onAdd }: SuggestionCardProps) {
             onError={() => setImageFailed(true)}
           />
         ) : (
-          <span style={{ color: 'var(--watermark)' }} className="font-display text-6xl font-bold select-none">
+          <span style={{ color: 'var(--watermark)' }} className="font-display text-7xl font-bold select-none">
             {suggestion.title.charAt(0).toUpperCase()}
           </span>
         )}
+
         {suggestion.rating !== null && (
-          <div className="absolute left-[5px] top-[5px] rounded-md bg-[#ff336d] px-1.5 py-0.5 font-display text-xs font-black text-white shadow-md">
+          <div className="absolute left-[5px] top-[5px] rounded-md bg-[#ff336d] px-1.5 py-0.5 text-center font-display text-xs font-black leading-tight text-white shadow-md md:left-2 md:top-2 md:px-2 md:py-1 md:text-sm">
             {suggestion.rating.toFixed(1)}
           </div>
         )}
       </div>
 
-      <div className="flex-1 min-w-0 p-3.5 flex flex-col gap-2">
+      <div className="flex-1 min-w-0 p-3.5 flex flex-col gap-2 text-left">
         <div>
-          <h3 className="font-display text-sm font-bold leading-snug">{suggestion.title}</h3>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-[var(--text-muted)]">
+          <h3 style={{ color: 'var(--text-primary)' }} className="font-display text-sm font-bold leading-snug">
+            {suggestion.title}
+          </h3>
+          <div
+            style={{ color: 'var(--text-muted)' }}
+            className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium"
+          >
             <span>{suggestion.year ?? '—'}</span>
             {minPlayers !== null && maxPlayers !== null && (
-              <span className="flex items-center gap-1">
-                <UsersIcon className="text-[#0e8396] dark:text-[#38e1ff]" size={12} />
+              <span className="flex items-center gap-1.5">
+                <UsersIcon className="text-[#0e8396] dark:text-[#38e1ff] shrink-0" size={13} />
                 {minPlayers === maxPlayers ? minPlayers : `${minPlayers}–${maxPlayers}`}
               </span>
             )}
             {minPlaytime !== null && (
-              <span className="flex items-center gap-1">
-                <ClockIcon className="text-[#0e8396] dark:text-[#38e1ff]" size={12} />
+              <span className="flex items-center gap-1.5">
+                <ClockIcon className="text-[#0e8396] dark:text-[#38e1ff] shrink-0" size={13} />
                 {maxPlaytime && maxPlaytime !== minPlaytime ? `${minPlaytime}–${maxPlaytime}` : minPlaytime} min
               </span>
             )}
             {suggestion.weight !== null && (
-              <span className="flex items-center gap-1 text-[#0e8396] dark:text-[#38e1ff]">
-                <DumbbellIcon size={12} />
+              <span className="flex items-center gap-1.5 text-[#0e8396] dark:text-[#38e1ff]">
+                <DumbbellIcon className="shrink-0" size={13} />
                 {suggestion.weight.toFixed(1)} / 5
               </span>
             )}
           </div>
         </div>
 
-        <p className="text-xs leading-relaxed">{suggestion.reason}</p>
+        <p style={{ color: 'var(--text-primary)' }} className="text-xs leading-relaxed">
+          {suggestion.reason}
+        </p>
 
-        <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
+        <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
           {suggestion.isWanted ? (
-            <span className="rounded-lg border border-[#a2d8e2] bg-[#d2eff4] px-2 py-1 text-[11px] font-bold text-[#0e8396] dark:border-[#1f294a] dark:bg-[#12182c] dark:text-[#8ba2c4]">
+            <span className="rounded-lg border border-[#a2d8e2] bg-[#d2eff4] px-2 py-1 text-[11px] font-semibold text-[#0e8396] dark:border-[#1f294a] dark:bg-[#12182c] dark:text-[#8ba2c4]">
               Already on your Wanted list
             </span>
           ) : addState === 'added' ? (
-            <span className="px-1 text-xs font-bold text-[#0e8396] dark:text-[#38e1ff]">Added to Wanted ✓</span>
+            <span className="text-xs font-bold text-[#0e8396] dark:text-[#38e1ff]">Added to Wanted ✓</span>
           ) : (
             <button
               type="button"
               onClick={onAdd}
               disabled={addState === 'adding'}
-              className="h-8 px-3 rounded-xl text-xs font-bold bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black disabled:opacity-50"
+              className="h-8 px-3 rounded-xl text-xs font-bold bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black active:scale-[0.98] transition-transform disabled:opacity-50"
             >
               {addState === 'adding' ? 'Adding…' : addState === 'failed' ? 'Retry adding' : 'Add to Wanted'}
             </button>
