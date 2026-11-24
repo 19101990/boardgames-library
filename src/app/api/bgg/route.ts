@@ -1,123 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { XMLParser } from 'fast-xml-parser';
-import { decodeHtmlEntities } from '@/lib/decodeHtmlEntities';
-
-const parser = new XMLParser({
-  ignoreAttributes: false,
-  attributeNamePrefix: '@_',
-});
-
-type XmlRecord = Record<string, unknown>;
-
-function asRecords(value: unknown): XmlRecord[] {
-  if (Array.isArray(value)) {
-    return value.filter((item): item is XmlRecord => typeof item === 'object' && item !== null);
-  }
-  return typeof value === 'object' && value !== null ? [value as XmlRecord] : [];
-}
-
-function attribute(record: unknown, name: string): string | undefined {
-  if (typeof record !== 'object' || record === null) return undefined;
-  const value = (record as XmlRecord)[`@_${name}`];
-  return typeof value === 'string' || typeof value === 'number' ? decodeHtmlEntities(String(value)) : undefined;
-}
-
-function childText(record: XmlRecord, name: string): string | undefined {
-  const value = record[name];
-  if (typeof value === 'string' || typeof value === 'number') return decodeHtmlEntities(String(value));
-  if (typeof value === 'object' && value !== null && '#text' in value) {
-    const text = (value as XmlRecord)['#text'];
-    return typeof text === 'string' || typeof text === 'number' ? decodeHtmlEntities(String(text)) : undefined;
-  }
-  return undefined;
-}
-
-function childNumber(record: XmlRecord, name: string): number | undefined {
-  const value = attribute(record[name], 'value');
-  if (value === undefined) return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function childNames(record: XmlRecord): string[] {
-  const value = record.name;
-  return asRecords(value)
-    .map((name) => attribute(name, 'value'))
-    .filter((name): name is string => Boolean(name));
-}
-
-function primaryName(record: XmlRecord): string | undefined {
-  const names = asRecords(record.name);
-  const primary = names.find((name) => attribute(name, 'type') === 'primary');
-  return (primary && attribute(primary, 'value')) ?? (names[0] && attribute(names[0], 'value'));
-}
-
-function links(record: XmlRecord, type: string): string[] {
-  return asRecords(record.link)
-    .filter((link) => attribute(link, 'type') === type)
-    .map((link) => attribute(link, 'value'))
-    .filter((value): value is string => Boolean(value));
-}
-
-function expansionLinks(record: XmlRecord): { bgg_id: number; title: string }[] {
-  return asRecords(record.link)
-    .filter((link) => attribute(link, 'type') === 'boardgameexpansion')
-    .map((link) => ({
-      bgg_id: Number(attribute(link, 'id')),
-      title: attribute(link, 'value') ?? '',
-    }))
-    .filter((expansion) =>
-      Number.isSafeInteger(expansion.bgg_id) && expansion.bgg_id > 0 && expansion.title.length > 0
-    );
-}
-
-function getToken(): string | null {
-  return process.env.BGG_API_TOKEN?.trim() || null;
-}
-
-async function fetchBgg(path: string): Promise<Response> {
-  const token = getToken();
-  if (!token) {
-    throw new Error('BGG_API_TOKEN is not configured on the server.');
-  }
-
-  return fetch(`https://boardgamegeek.com/xmlapi2/${path}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/xml',
-    },
-    cache: 'no-store',
-    signal: AbortSignal.timeout(15000),
-  });
-}
-
-async function parseResponse(response: Response): Promise<XmlRecord> {
-  if (response.status === 202) {
-    throw new Error('BGG is processing this request. Try again shortly.');
-  }
-  if (response.status === 429) {
-    throw new Error('BGG rate limit reached. Try again later.');
-  }
-  if (!response.ok) {
-    throw new Error(`BGG returned HTTP ${response.status}. Check the API token and try again.`);
-  }
-
-  const xml = await response.text();
-  const parsed = parser.parse(xml) as XmlRecord;
-  if (typeof parsed.items !== 'object' || parsed.items === null) {
-    throw new Error('BGG returned an unexpected response.');
-  }
-  return parsed.items as XmlRecord;
-}
-
-async function fetchBggItems(path: string): Promise<XmlRecord> {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const response = await fetchBgg(path);
-    if (response.status !== 202 || attempt === 4) return parseResponse(response);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-  }
-  throw new Error('BGG request could not be completed.');
-}
+import {
+  asRecords,
+  attribute,
+  childNames,
+  childNumber,
+  childText,
+  expansionLinks,
+  fetchBggItems,
+  links,
+  primaryName,
+} from '@/lib/bgg';
 
 function errorResponse(error: unknown): NextResponse {
   const message = error instanceof Error ? error.message : 'BGG request failed.';

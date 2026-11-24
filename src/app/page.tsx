@@ -10,6 +10,7 @@ import { useSupabaseAuth } from '@/lib/useSupabaseAuth';
 import { cacheGame, cacheGameDetails } from '@/lib/offlineGameStore';
 import { addGame, getLibraryMode, loadLibrary } from '@/lib/libraryData';
 import { DemoNotice } from '@/components/demo/DemoNotice';
+import { DiscoverPanel } from '@/components/discover/DiscoverPanel';
 import { useOnlineStatus } from '@/lib/useOnlineStatus';
 import { BoardGame, NewBoardGame } from '@/types/types';
 import {
@@ -23,7 +24,10 @@ import {
   HeartIcon,
   PlusCircleIcon,
   RefreshIcon,
+  SparklesIcon,
 } from '@/components/ui/Icons';
+
+type Tab = 'collection' | 'wanted' | 'discover' | 'add';
 
 export default function CollectionPage() {
   const { user, isLoading: isAuthLoading, errorMessage: authError } = useSupabaseAuth();
@@ -81,7 +85,9 @@ export default function CollectionPage() {
   const [players, setPlayers] = useState('Any');
   const [playTime, setPlayTime] = useState('Any');
   const [sortBy, setSortBy] = useState('rating');
-  const [activeTab, setActiveTab] = useState<'collection' | 'wanted' | 'add'>('collection');
+  const [activeTab, setActiveTab] = useState<Tab>('collection');
+  // Discover and Add replace the list view, so they hide search, filters and BGG refresh.
+  const showsGameList = activeTab === 'collection' || activeTab === 'wanted';
 
   const filteredGames = useMemo(() => {
     return games
@@ -248,17 +254,22 @@ export default function CollectionPage() {
   const ownedCount = games.filter((g) => g.status === 'owned').length;
   const wantedCount = games.filter((g) => g.status === 'wishlist').length;
 
-  const handleAddNewGame = async (newGame: NewBoardGame, targetStatus: 'owned' | 'wishlist') => {
-    if (!libraryMode) return;
+  /** Saves a new game. Resolves true when saved. stayOnTab keeps Discover open after adding. */
+  const handleAddNewGame = async (
+    newGame: NewBoardGame,
+    targetStatus: 'owned' | 'wishlist',
+    options: { stayOnTab?: boolean } = {}
+  ): Promise<boolean> => {
+    if (!libraryMode) return false;
     if (libraryMode === 'live' && (!isOnline || !navigator.onLine)) {
       alert('Connect to the internet before changing your library.');
-      return;
+      return false;
     }
 
     // Optimistic UI update
     const optimisticGame = newGame as BoardGame;
     setGames((prev) => [optimisticGame, ...prev]);
-    setActiveTab(targetStatus === 'owned' ? 'collection' : 'wanted');
+    if (!options.stayOnTab) setActiveTab(targetStatus === 'owned' ? 'collection' : 'wanted');
 
     // Row matching the Supabase games table schema (the demo stores the same shape)
     const payload: BoardGame = {
@@ -289,7 +300,7 @@ export default function CollectionPage() {
       alert(`Could not save "${newGame.title}": ${message}`);
       // Revert optimistic update
       setGames((prev) => prev.filter((game) => game !== optimisticGame));
-      return;
+      return false;
     }
 
     // The demo may give the game a different id ("demo-" prefix), so swap in the saved record.
@@ -311,6 +322,45 @@ export default function CollectionPage() {
         });
       }
     }
+    return true;
+  };
+
+  /** "Add to Wanted" on a Discover card: load full BGG details like the Add form does, then save. */
+  const handleAddSuggestionToWanted = async (bggId: number): Promise<boolean> => {
+    try {
+      const response = await fetch(`/api/bgg?id=${bggId}`);
+      const metadata: Partial<BoardGame> & {
+        title?: string;
+        error?: string;
+        expansions?: { bgg_id: number; title: string }[];
+      } = await response.json();
+      if (!response.ok || !metadata.title) throw new Error(metadata.error ?? 'Could not load game details.');
+
+      const newGame: NewBoardGame = {
+        id: `bgg-${bggId}`,
+        bgg_id: bggId,
+        title: metadata.title,
+        year_published: metadata.year_published ?? undefined,
+        status: 'wishlist',
+        play_count: 0,
+        image_url: metadata.image_url,
+        thumbnail_url: metadata.thumbnail_url,
+        description: metadata.description,
+        categories: metadata.categories ?? [],
+        mechanics: metadata.mechanics ?? [],
+        min_players: metadata.min_players ?? 1,
+        max_players: metadata.max_players ?? 4,
+        min_playtime: metadata.min_playtime ?? 30,
+        max_playtime: metadata.max_playtime ?? 60,
+        bgg_rating: metadata.bgg_rating,
+        complexity_weight: metadata.complexity_weight,
+        bgg_expansions: metadata.expansions ?? [],
+      };
+      return await handleAddNewGame(newGame, 'wishlist', { stayOnTab: true });
+    } catch (error) {
+      console.error('Could not add the suggestion to Wanted:', error);
+      return false;
+    }
   };
 
   const renderNavigation = (isDesktop: boolean) => (
@@ -325,46 +375,47 @@ export default function CollectionPage() {
         }}
         className="backdrop-blur-xl border p-1.5 rounded-2xl flex items-center justify-between shadow-2xl"
       >
-        <button
-          type="button"
-          onClick={() => setActiveTab('collection')}
-          className={`${isDesktop ? '' : 'flex-1'} py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all ${
-            activeTab === 'collection'
-              ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg shadow-[#0e8396]/20 dark:shadow-[#38e1ff]/20'
-              : 'text-[#536482] dark:text-[#8ba2c4]'
-          }`}
-        >
-          <BookIcon size={16} />
-          <span>Collection</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('wanted')}
-          className={`${isDesktop ? '' : 'flex-1'} py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all ${
-            activeTab === 'wanted'
-              ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg shadow-[#0e8396]/20 dark:shadow-[#38e1ff]/20'
-              : 'text-[#536482] dark:text-[#8ba2c4]'
-          }`}
-        >
-          <HeartIcon size={16} />
-          <span>Wanted</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('add')}
-          disabled={!libraryMode || !isOnline}
-          title={!isOnline ? 'Connect to add games' : !libraryMode ? 'Checking login status' : 'Add a game'}
-          className={`${isDesktop ? '' : 'flex-1'} py-2 px-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all ${
-            activeTab === 'add'
-              ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg shadow-[#0e8396]/20 dark:shadow-[#38e1ff]/20'
-              : 'text-[#536482] dark:text-[#8ba2c4]'
-          } disabled:opacity-40 disabled:cursor-not-allowed`}
-        >
-          <PlusCircleIcon size={16} />
-          <span>Add</span>
-        </button>
+        {(
+          [
+            { tab: 'collection', label: 'Collection', icon: <BookIcon size={16} /> },
+            { tab: 'wanted', label: 'Wanted', icon: <HeartIcon size={16} /> },
+            { tab: 'discover', label: 'Discover', icon: <SparklesIcon size={16} /> },
+            { tab: 'add', label: 'Add', icon: <PlusCircleIcon size={16} /> },
+          ] as const
+        ).map(({ tab, label, icon }) => {
+          // Discover and Add need the login state and a connection.
+          const needsConnection = tab === 'discover' || tab === 'add';
+          const isDisabled = needsConnection && (!libraryMode || !isOnline);
+          return (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              disabled={isDisabled}
+              aria-current={activeTab === tab ? 'page' : undefined}
+              title={
+                isDisabled
+                  ? !isOnline
+                    ? `Connect to use ${label}`
+                    : 'Checking login status'
+                  : undefined
+              }
+              className={`${
+                isDesktop
+                  ? 'py-2 px-3 gap-2 text-xs'
+                  : // Four tabs don't fit side by side on small phones, so the icon sits above the label.
+                    'flex-1 flex-col py-1.5 px-1 gap-0.5 text-[11px]'
+              } rounded-xl flex items-center justify-center font-bold transition-all ${
+                activeTab === tab
+                  ? 'bg-[#0e8396] text-white dark:bg-[#38e1ff] dark:text-black shadow-lg shadow-[#0e8396]/20 dark:shadow-[#38e1ff]/20'
+                  : 'text-[#536482] dark:text-[#8ba2c4]'
+              } disabled:opacity-40 disabled:cursor-not-allowed`}
+            >
+              {icon}
+              <span>{label}</span>
+            </button>
+          );
+        })}
       </div>
     </nav>
   );
@@ -375,14 +426,14 @@ export default function CollectionPage() {
         
         {/* Top Header */}
         <header className="px-5 pt-7 pb-3 md:px-8 md:pt-8 md:pb-5">
-          {activeTab === 'add' ? (
+          {!showsGameList ? (
             <div className="md:hidden">
               <p className="text-xs font-semibold italic text-[#0e8396] dark:text-[#38e1ff] tracking-wide">
-                Three quick steps
+                {activeTab === 'discover' ? 'AI game ideas' : 'Three quick steps'}
               </p>
               <div className="flex items-center justify-between mt-1">
                 <h1 className="font-display text-3xl font-black tracking-tight">
-                  Add a game
+                  {activeTab === 'discover' ? 'Discover' : 'Add a game'}
                 </h1>
                 <div className="flex items-center gap-2.5">
                   <AuthControl user={user} isLoading={isAuthLoading} authError={authError} />
@@ -518,19 +569,27 @@ export default function CollectionPage() {
                 <p className="text-xs font-semibold italic text-[#0e8396] dark:text-[#38e1ff] tracking-wide">
                   {activeTab === 'add'
                     ? 'Three quick steps'
-                    : activeTab === 'wanted'
-                      ? `${wantedCount} games wanted`
-                      : `${ownedCount} games owned`}
+                    : activeTab === 'discover'
+                      ? 'AI game ideas'
+                      : activeTab === 'wanted'
+                        ? `${wantedCount} games wanted`
+                        : `${ownedCount} games owned`}
                 </p>
                 <h1 className="mt-1 font-display text-3xl font-black tracking-tight">
-                  {activeTab === 'add' ? 'Add a game' : activeTab === 'wanted' ? 'Wanted' : 'Collection'}
+                  {activeTab === 'add'
+                    ? 'Add a game'
+                    : activeTab === 'discover'
+                      ? 'Discover'
+                      : activeTab === 'wanted'
+                        ? 'Wanted'
+                        : 'Collection'}
                 </h1>
               </div>
               {renderNavigation(true)}
             </div>
 
             <div className="flex items-center justify-between gap-4">
-              {activeTab !== 'add' ? (
+              {showsGameList ? (
                 <div className="flex min-w-0 max-w-[640px] flex-1 items-center gap-2.5">
                   <div
                     style={{
@@ -607,7 +666,7 @@ export default function CollectionPage() {
                 >
                   {isDark ? <SunIcon size={18} /> : <MoonIcon size={18} />}
                 </button>
-                {activeTab !== 'add' && (
+                {showsGameList && (
                   <button
                     type="button"
                     onClick={handleRefreshBgg}
@@ -635,7 +694,7 @@ export default function CollectionPage() {
               </div>
             </div>
           </div>
-          {bggRefreshProgress && activeTab !== 'add' && (
+          {bggRefreshProgress && showsGameList && (
             <p className="mt-3 text-xs text-[var(--text-muted)]" role="status" aria-live="polite">
               {bggRefreshProgress}
             </p>
@@ -645,14 +704,24 @@ export default function CollectionPage() {
         {/* Content Body */}
         <main className="px-5 pt-3 flex-1 md:px-8 md:pt-5">
           {isDemo && <DemoNotice className="mb-3" />}
-          {!isOnline && activeTab !== 'add' && (
+          {!isOnline && showsGameList && (
             <p className="mb-3 rounded-xl border border-[var(--border-surface)] bg-[var(--bg-surface)] px-3 py-2 text-xs text-[var(--text-muted)]">
               {isDemo
                 ? 'Offline — the demo keeps working from data saved on this device. Adding new games needs internet.'
                 : 'Offline — showing the saved library. Changes are unavailable.'}
             </p>
           )}
-          {activeTab === 'add' ? (
+          {activeTab === 'discover' ? (
+            libraryMode ? (
+              <DiscoverPanel
+                key={libraryMode}
+                games={games}
+                libraryMode={libraryMode}
+                isOnline={isOnline}
+                onAddToWanted={handleAddSuggestionToWanted}
+              />
+            ) : null
+          ) : activeTab === 'add' ? (
             !isOnline ? (
               <div className="py-16 text-center space-y-3">
                 <p className="text-sm font-bold">You’re offline.</p>

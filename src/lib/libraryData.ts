@@ -10,6 +10,7 @@ import {
   addDemoGame,
   deleteDemoGame,
   deleteDemoPlay,
+  getAllDemoPlays,
   getDemoGameDetails,
   getDemoGames,
   newDemoId,
@@ -187,6 +188,28 @@ async function loadDemoGameDetails(gameId: string): Promise<GameDetailsLoadResul
 
 export function loadGameDetails(mode: LibraryMode, gameId: string): Promise<GameDetailsLoadResult> {
   return mode === 'demo' ? loadDemoGameDetails(gameId) : loadLiveGameDetails(gameId);
+}
+
+// ---------- All plays (AI recommender) ----------
+
+/**
+ * Every play in the library, used to work out favourite games. Needs a connection in
+ * live mode; the AI feature is online-only anyway. Throws a user-readable Error.
+ */
+export async function loadAllPlays(mode: LibraryMode): Promise<PlaySession[]> {
+  if (mode === 'demo') return getAllDemoPlays();
+
+  // Newest first. Supabase's API caps a response at its "Max rows" project setting
+  // (1000 by default), so a very long history is cut to the most recent plays.
+  const { data, error } = await supabase
+    .from('plays')
+    .select('*')
+    .order('play_date', { ascending: false });
+  if (error) {
+    console.error('Error fetching plays:', error);
+    throw new Error('Could not load your plays.');
+  }
+  return (data ?? []) as PlaySession[];
 }
 
 // ---------- Changes ----------
