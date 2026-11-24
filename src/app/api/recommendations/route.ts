@@ -8,8 +8,12 @@ import {
 import { verifySuggestions, type AiSuggestion } from '@/lib/verifySuggestions';
 
 // AI recommender: the browser sends the visitor's choices and favourite games,
-// the server checks them, builds the prompt from a fixed template and asks
-// Cloudflare Workers AI. BGG checks and rate limits come in later steps.
+// the server checks them, builds the prompt from a fixed template, asks
+// Cloudflare Workers AI, then verifies every idea on BoardGameGeek.
+
+// Requests take 10–20s (AI up to TIMEOUT_MS, then BGG). Tells Vercel not to stop the
+// function earlier; 60s is allowed on every Vercel plan.
+export const maxDuration = 60;
 
 const MODEL = '@cf/openai/gpt-oss-120b';
 // Hard cap on answer length (and cost) per request. Includes the model's thinking,
