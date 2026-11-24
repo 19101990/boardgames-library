@@ -138,6 +138,18 @@ export async function getDemoGames(): Promise<BoardGame[]> {
   }
 }
 
+/** Every demo play, for the AI recommender's favourites. */
+export async function getAllDemoPlays(): Promise<PlaySession[]> {
+  await ensureDemoSeeded();
+  const database = await openDatabase();
+  try {
+    const transaction = database.transaction(PLAYS_STORE, 'readonly');
+    return await requestResult(transaction.objectStore(PLAYS_STORE).getAll() as IDBRequest<PlaySession[]>);
+  } finally {
+    database.close();
+  }
+}
+
 // ---------- Writes (demo changes stay in this browser only) ----------
 
 async function withWriteTransaction(
