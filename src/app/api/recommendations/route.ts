@@ -1,12 +1,23 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import {
+  REQUEST_LIMITS,
+  SUGGESTIONS_TO_REQUEST,
+  buildPrompt,
+  validateRecommendationRequest,
+} from '@/lib/recommendationRequest';
 
-// Step 1 of the AI recommender: a fixed test question, so we can see the whole
-// round trip (our server -> Cloudflare Workers AI -> our server) working.
-// Visitor input, favourites and BGG checks come in later steps.
+// AI recommender: the browser sends the visitor's choices and favourite games,
+// the server checks them, builds the prompt from a fixed template and asks
+// Cloudflare Workers AI. BGG checks and rate limits come in later steps.
 
 const MODEL = '@cf/openai/gpt-oss-120b';
-const MAX_OUTPUT_TOKENS = 600; // hard cap on answer length (and cost) per request
-const TIMEOUT_MS = 30000;
+// Hard cap on answer length (and cost) per request. Includes the model's thinking,
+// so it must leave room for that plus 8 suggestions.
+const MAX_OUTPUT_TOKENS = 1500;
+// With default effort the model can spend the whole token budget thinking and never
+// answer (measured: 26s, no answer). Low effort measured ~12s and ~55 Neurons per request.
+const REASONING_EFFORT = 'low';
+const TIMEOUT_MS = 45000;
 
 // The exact JSON shape the AI must reply with. Cloudflare's JSON mode enforces it.
 const RESPONSE_SCHEMA = {
@@ -67,11 +78,32 @@ function parseSuggestions(content: unknown): Suggestion[] | null {
   );
 }
 
-export async function GET() {
+export async function POST(request: NextRequest) {
   const config = getCloudflareConfig();
   if (!config) {
     return NextResponse.json({ error: 'The AI service is not configured on the server.' }, { status: 503 });
   }
+
+  // 1. Size check before parsing, so a huge request can't waste server time.
+  const rawBody = await request.text();
+  if (rawBody.length > REQUEST_LIMITS.bodyChars) {
+    return NextResponse.json({ error: 'The request is too large.' }, { status: 413 });
+  }
+
+  // 2. Must be JSON.
+  let body: unknown;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: 'The request must be valid JSON.' }, { status: 400 });
+  }
+
+  // 3. Every field checked; anything unexpected is rejected before the AI is called.
+  const validation = validateRecommendationRequest(body);
+  if (!validation.ok) {
+    return NextResponse.json({ error: validation.error }, { status: 400 });
+  }
+  const prompt = buildPrompt(validation.value);
 
   try {
     const response = await fetch(
@@ -84,13 +116,11 @@ export async function GET() {
         },
         body: JSON.stringify({
           messages: [
-            { role: 'system', content: 'You recommend board games.' },
-            {
-              role: 'user',
-              content: 'Suggest 3 board games similar to Wingspan. reason = one sentence why it fits.',
-            },
+            { role: 'system', content: prompt.system },
+            { role: 'user', content: prompt.user },
           ],
           max_tokens: MAX_OUTPUT_TOKENS,
+          reasoning_effort: REASONING_EFFORT,
           response_format: {
             type: 'json_schema',
             json_schema: { name: 'suggestions', schema: RESPONSE_SCHEMA },
@@ -115,7 +145,7 @@ export async function GET() {
 
     // Usage is logged on the server (for us), not sent to the visitor.
     console.log('AI usage:', body.result?.usage);
-    return NextResponse.json({ suggestions });
+    return NextResponse.json({ suggestions: suggestions.slice(0, SUGGESTIONS_TO_REQUEST) });
   } catch (error) {
     console.error('Cloudflare AI request error:', error);
     return NextResponse.json({ error: 'The AI service did not respond. Try again later.' }, { status: 502 });
