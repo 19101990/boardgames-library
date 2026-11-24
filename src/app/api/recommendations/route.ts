@@ -5,6 +5,7 @@ import {
   buildPrompt,
   validateRecommendationRequest,
 } from '@/lib/recommendationRequest';
+import { verifySuggestions, type AiSuggestion } from '@/lib/verifySuggestions';
 
 // AI recommender: the browser sends the visitor's choices and favourite games,
 // the server checks them, builds the prompt from a fixed template and asks
@@ -39,12 +40,6 @@ const RESPONSE_SCHEMA = {
   required: ['suggestions'],
 };
 
-interface Suggestion {
-  title: string;
-  year: number;
-  reason: string;
-}
-
 // Server-only settings. No NEXT_PUBLIC_ prefix, so these never reach the browser.
 function getCloudflareConfig(): { accountId: string; token: string } | null {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
@@ -53,7 +48,7 @@ function getCloudflareConfig(): { accountId: string; token: string } | null {
 }
 
 // Never trust the AI's output: check every field before using it.
-function parseSuggestions(content: unknown): Suggestion[] | null {
+function parseSuggestions(content: unknown): AiSuggestion[] | null {
   let data: unknown = content;
   if (typeof content === 'string') {
     try {
@@ -68,7 +63,7 @@ function parseSuggestions(content: unknown): Suggestion[] | null {
   if (!Array.isArray(list)) return null;
 
   return list.filter(
-    (item): item is Suggestion =>
+    (item): item is AiSuggestion =>
       typeof item === 'object' &&
       item !== null &&
       typeof item.title === 'string' &&
@@ -145,7 +140,22 @@ export async function POST(request: NextRequest) {
 
     // Usage is logged on the server (for us), not sent to the visitor.
     console.log('AI usage:', body.result?.usage);
-    return NextResponse.json({ suggestions: suggestions.slice(0, SUGGESTIONS_TO_REQUEST) });
+
+    // Check every idea on BoardGameGeek; only verified games reach the visitor.
+    try {
+      const verified = await verifySuggestions(
+        suggestions.slice(0, SUGGESTIONS_TO_REQUEST),
+        validation.value
+      );
+      console.log('BGG check dropped:', verified.dropped);
+      return NextResponse.json({ suggestions: verified.suggestions });
+    } catch (error) {
+      console.error('BGG check failed:', error);
+      return NextResponse.json(
+        { error: 'Could not check the suggestions with BoardGameGeek. Try again later.' },
+        { status: 502 }
+      );
+    }
   } catch (error) {
     console.error('Cloudflare AI request error:', error);
     return NextResponse.json({ error: 'The AI service did not respond. Try again later.' }, { status: 502 });

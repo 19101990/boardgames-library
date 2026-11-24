@@ -24,12 +24,17 @@ export interface RecommendationRequest {
   favourites: FavouriteGame[];
   /** Games already in the collection, so the AI doesn't suggest them. */
   ownedTitles: string[];
+  /** BGG IDs of owned games: suggestions with these IDs are removed. */
+  ownedBggIds: number[];
+  /** BGG IDs of Wanted games: suggestions with these IDs are labelled, at most 2 kept. */
+  wantedBggIds: number[];
 }
 
 export const REQUEST_LIMITS = {
   bodyChars: 30000, // whole request, checked before parsing
   favourites: 10,
   ownedTitles: 300,
+  bggIds: 500,
   titleLength: 100,
   tagsPerGame: 8,
   tagLength: 50,
@@ -55,6 +60,11 @@ function cleanTextList(value: unknown, maxItems: number, maxLength: number): str
 
 function isWholeNumber(value: unknown, min: number, max: number): value is number {
   return Number.isInteger(value) && (value as number) >= min && (value as number) <= max;
+}
+
+function cleanIdList(value: unknown): number[] | null {
+  if (!Array.isArray(value) || value.length > REQUEST_LIMITS.bggIds) return null;
+  return value.every((id) => isWholeNumber(id, 1, 100_000_000)) ? (value as number[]) : null;
 }
 
 function validateFavourite(value: unknown, players: PlayerCountChoice): FavouriteGame | string {
@@ -120,9 +130,22 @@ export function validateRecommendationRequest(body: unknown): ValidationResult {
     return { ok: false, error: `ownedTitles must be up to ${REQUEST_LIMITS.ownedTitles} titles.` };
   }
 
+  const ownedBggIds = cleanIdList(input.ownedBggIds ?? []);
+  const wantedBggIds = cleanIdList(input.wantedBggIds ?? []);
+  if (!ownedBggIds || !wantedBggIds) {
+    return { ok: false, error: `ownedBggIds and wantedBggIds must be up to ${REQUEST_LIMITS.bggIds} BGG IDs.` };
+  }
+
   return {
     ok: true,
-    value: { players: players as PlayerCountChoice, mode: input.mode, favourites, ownedTitles },
+    value: {
+      players: players as PlayerCountChoice,
+      mode: input.mode,
+      favourites,
+      ownedTitles,
+      ownedBggIds,
+      wantedBggIds,
+    },
   };
 }
 
