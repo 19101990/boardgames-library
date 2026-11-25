@@ -43,7 +43,15 @@ export const REQUEST_LIMITS = {
   plays: 10000,
 } as const;
 
-export const SUGGESTIONS_TO_REQUEST = 8; // more than we show, so invalid ones can be dropped later
+/**
+ * How many ideas to ask the AI for: more than we show, so invalid ones can be dropped.
+ * The AI often ignores player counts, and the BGG check then drops most ideas
+ * (measured: 6 of 8 dropped for "1 and 3"), so ask for more when counts are chosen.
+ */
+export function suggestionsToRequest(players: PlayerCountChoice): number {
+  if (players.length === 0) return 8;
+  return players.length === 1 ? 10 : 12;
+}
 
 type ValidationResult = { ok: true; value: RecommendationRequest } | { ok: false; error: string };
 
@@ -185,10 +193,11 @@ function describeFavourite(game: FavouriteGame, players: PlayerCountChoice): str
 export function buildPrompt(request: RecommendationRequest): { system: string; user: string } {
   const { players, mode, favourites, ownedTitles } = request;
 
+  const count = suggestionsToRequest(players);
   const task =
     mode === 'similar'
-      ? `Suggest ${SUGGESTIONS_TO_REQUEST} games they will enjoy because they are similar to their favourites.`
-      : `Suggest ${SUGGESTIONS_TO_REQUEST} games that are different from their favourites (other mechanics or themes) but that they would still likely enjoy, judging by what they rate highly.`;
+      ? `Suggest ${count} games they will enjoy because they are similar to their favourites.`
+      : `Suggest ${count} games that are different from their favourites (other mechanics or themes) but that they would still likely enjoy, judging by what they rate highly.`;
 
   const playerRule =
     players.length === 0

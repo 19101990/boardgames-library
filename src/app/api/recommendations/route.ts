@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   REQUEST_LIMITS,
-  SUGGESTIONS_TO_REQUEST,
   buildPrompt,
+  suggestionsToRequest,
   validateRecommendationRequest,
 } from '@/lib/recommendationRequest';
 import { verifySuggestions, type AiSuggestion } from '@/lib/verifySuggestions';
@@ -17,8 +17,8 @@ export const maxDuration = 60;
 
 const MODEL = '@cf/openai/gpt-oss-120b';
 // Hard cap on answer length (and cost) per request. Includes the model's thinking,
-// so it must leave room for that plus 8 suggestions.
-const MAX_OUTPUT_TOKENS = 1500;
+// so it must leave room for that plus up to 12 suggestions (8 measured ~530 tokens).
+const MAX_OUTPUT_TOKENS = 2000;
 // With default effort the model can spend the whole token budget thinking and never
 // answer (measured: 26s, no answer). Low effort measured ~12s and ~55 Neurons per request.
 const REASONING_EFFORT = 'low';
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
     // Check every idea on BoardGameGeek; only verified games reach the visitor.
     try {
       const verified = await verifySuggestions(
-        suggestions.slice(0, SUGGESTIONS_TO_REQUEST),
+        suggestions.slice(0, suggestionsToRequest(validation.value.players)),
         validation.value
       );
       console.log('BGG check dropped:', verified.dropped);

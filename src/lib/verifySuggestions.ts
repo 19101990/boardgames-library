@@ -41,8 +41,12 @@ const MAX_WANTED_IN_RESULTS = 2;
 const MAX_CANDIDATES_PER_TITLE = 3;
 /** Games with fewer BGG ratings are treated as a wrong match (a same-named obscure item). */
 const MIN_USERS_RATED = 30;
-/** "Plays very well with N" = at least 70% of voters call N Best or Recommended... */
-const MIN_POSITIVE_SHARE = 0.7;
+/**
+ * "Plays very well with N" = at least 60% of voters call N Best or Recommended...
+ * (70% dropped well-liked solo games such as Agricola 67%, Everdell 64%, Scythe 61%,
+ * while clearly weak counts sit far lower, e.g. Root solo 11%, Stone Age solo 4%.)
+ */
+const MIN_POSITIVE_SHARE = 0.6;
 /** ...but only when enough people voted; otherwise supporting the count is enough. */
 const MIN_PLAYER_COUNT_VOTES = 10;
 
