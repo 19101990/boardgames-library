@@ -44,14 +44,11 @@ export const REQUEST_LIMITS = {
 } as const;
 
 /**
- * How many ideas to ask the AI for: more than we show, so invalid ones can be dropped.
- * The AI often ignores player counts, and the BGG check then drops most ideas
- * (measured: 6 of 8 dropped for "1 and 3"), so ask for more when counts are chosen.
+ * How many ideas to ask the AI for: well over the 5 we show, because the BGG check drops
+ * many. Measured with 8: the AI ignored player counts (6 of 8 dropped for "1 and 3") and
+ * its "never suggest" list (4 of 8 already owned in the demo).
  */
-export function suggestionsToRequest(players: PlayerCountChoice): number {
-  if (players.length === 0) return 8;
-  return players.length === 1 ? 10 : 12;
-}
+export const SUGGESTIONS_TO_REQUEST = 12;
 
 type ValidationResult = { ok: true; value: RecommendationRequest } | { ok: false; error: string };
 
@@ -190,14 +187,53 @@ function describeFavourite(game: FavouriteGame, players: PlayerCountChoice): str
   return line;
 }
 
-export function buildPrompt(request: RecommendationRequest): { system: string; user: string } {
-  const { players, mode, favourites, ownedTitles } = request;
+/**
+ * The tags that come up most across the favourites (best-rated first on ties), e.g. the
+ * mechanics "Worker Placement, Hand Management". Plain counting, done by our code, so
+ * the AI gets a clear "this is what they usually play" instead of working it out.
+ */
+function mostCommonTags(favourites: FavouriteGame[], pick: (game: FavouriteGame) => string[], limit: number): string[] {
+  const counts = new Map<string, number>();
+  for (const game of favourites) {
+    for (const tag of new Set(pick(game))) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+  }
+  // Map keeps insertion order and sort is stable, so ties stay in favourite order.
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([tag]) => tag);
+}
 
-  const count = suggestionsToRequest(players);
-  const task =
-    mode === 'similar'
-      ? `Suggest ${count} games they will enjoy because they are similar to their favourites.`
-      : `Suggest ${count} games that are different from their favourites (other mechanics or themes) but that they would still likely enjoy, judging by what they rate highly.`;
+function describeTask(request: RecommendationRequest, count: number): string {
+  const mechanics = mostCommonTags(request.favourites, (game) => game.mechanics, 5);
+  const themes = mostCommonTags(request.favourites, (game) => game.categories, 4);
+  const usual = [
+    mechanics.length > 0 ? `mechanics: ${mechanics.join(', ')}` : '',
+    themes.length > 0 ? `themes: ${themes.join(', ')}` : '',
+  ]
+    .filter((part) => part !== '')
+    .join('; ');
+
+  if (request.mode === 'similar') {
+    return [
+      `Suggest ${count} games they will enjoy because they are close to their favourites.`,
+      usual ? `What their favourites most often have in common (${usual}). Build on that.` : '',
+      'In each reason, name the favourite it is most like and what they share.',
+    ].join(' ');
+  }
+  return [
+    `Suggest ${count} games that would be something new for them.`,
+    usual ? `Their favourites mostly use these (${usual}).` : '',
+    'Do not suggest games built mainly on those mechanics or themes, and do not suggest close relatives of their favourites (same designer series, same core loop).',
+    'Choose games with a different core mechanic and a different theme that still match the complexity and quality of what they rate highly.',
+    'In each reason, say what is new compared with their favourites and why they would still enjoy it.',
+  ].join(' ');
+}
+
+export function buildPrompt(request: RecommendationRequest): { system: string; user: string } {
+  const { players, favourites, ownedTitles } = request;
+
+  const task = describeTask(request, SUGGESTIONS_TO_REQUEST);
 
   const playerRule =
     players.length === 0

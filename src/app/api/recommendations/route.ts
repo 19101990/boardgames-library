@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   REQUEST_LIMITS,
+  SUGGESTIONS_TO_REQUEST,
   buildPrompt,
-  suggestionsToRequest,
   validateRecommendationRequest,
 } from '@/lib/recommendationRequest';
 import { verifySuggestions, type AiSuggestion } from '@/lib/verifySuggestions';
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
     // Check every idea on BoardGameGeek; only verified games reach the visitor.
     try {
       const verified = await verifySuggestions(
-        suggestions.slice(0, suggestionsToRequest(validation.value.players)),
+        suggestions.slice(0, SUGGESTIONS_TO_REQUEST),
         validation.value
       );
       console.log('BGG check dropped:', verified.dropped);
