@@ -11,6 +11,11 @@ const PLAYS_STORE = 'plays';
 const META_STORE = 'meta';
 const SEED_URL = '/demo/seed.json';
 const SEED_META_KEY = 'seed';
+/**
+ * Must match schema_version in public/demo/seed.json. When the seed changes, bump both:
+ * browsers holding an older demo then replace it (and the visitor's demo edits) once.
+ */
+const CURRENT_SEED_VERSION = 2;
 
 interface DemoSeed {
   schema_version: number;
@@ -107,14 +112,28 @@ async function writeSeed(database: IDBDatabase, seed: DemoSeed): Promise<void> {
 let seedingPromise: Promise<void> | null = null;
 
 /**
- * Fills demo storage from /demo/seed.json the first time the demo is opened on this device.
- * After that the demo works offline from IndexedDB alone.
+ * Fills demo storage from /demo/seed.json the first time the demo is opened on this device,
+ * and replaces it once when the seed version is newer. After that the demo works offline
+ * from IndexedDB alone.
  */
 export function ensureDemoSeeded(): Promise<void> {
   seedingPromise ??= (async () => {
     const database = await openDatabase();
     try {
-      if (await readSeedMeta(database)) return;
+      const meta = await readSeedMeta(database);
+      if (meta && meta.schema_version >= CURRENT_SEED_VERSION) return;
+
+      if (meta) {
+        // An older demo is stored. Replace it when we can; if the new seed can't be
+        // downloaded (e.g. offline), keep the old demo rather than show an error.
+        try {
+          await writeSeed(database, await fetchSeed());
+        } catch (error) {
+          console.warn('Could not update the demo data; keeping the stored version.', error);
+        }
+        return;
+      }
+
       await writeSeed(database, await fetchSeed());
     } finally {
       database.close();

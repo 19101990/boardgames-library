@@ -23,54 +23,32 @@ const MAX_EXPANSIONS = 6;
 
 // [bggId, expected title] — the title is only used to catch wrong IDs.
 const OWNED = [
-  // Gateway / family
-  [13, 'Catan'], [822, 'Carcassonne'], [9209, 'Ticket to Ride'], [14996, 'Ticket to Ride: Europe'],
-  [30549, 'Pandemic'], [230802, 'Azul'], [204583, 'Kingdomino'], [70919, 'Takenoko'],
-  [148228, 'Splendor'], [133473, 'Sushi Go!'], [70323, 'King of Tokyo'], [143884, 'Machi Koro'],
-  [153938, 'Camel Up'], [65244, 'Forbidden Island'], [136063, 'Forbidden Desert'], [123540, 'Tokaido'],
-  [11, 'Bohnanza'], [209685, 'Century: Spice Road'], [199561, 'Sagrada'], [194655, 'Santorini'],
-  [283155, 'Calico'], [295947, 'Cascadia'], [266524, 'PARKS'], [336986, 'Flamecraft'],
-  [176494, 'Isle of Skye'], [163412, 'Patchwork'],
+  // Family / gateway
+  [14996, 'Ticket to Ride: Europe'], [822, 'Carcassonne'], [230802, 'Azul'], [148228, 'Splendor'],
+  [204583, 'Kingdomino'], [295947, 'Cascadia'],
   // Party / social
-  [178900, 'Codenames'], [39856, 'Dixit'], [254640, 'Just One'], [262543, 'Wavelength'],
-  [225694, 'Decrypto'], [244992, 'The Mind'], [92415, 'Skull'], [131357, 'Coup'],
-  [128882, 'The Resistance: Avalon'], [129622, 'Love Letter'], [157969, 'Sheriff of Nottingham'],
-  [181304, 'Mysterium'], [10547, 'Betrayal at House on the Hill'],
+  [178900, 'Codenames'], [254640, 'Just One'], [262543, 'Wavelength'], [128882, 'The Resistance: Avalon'],
+  [92415, 'Skull'],
   // Two-player
-  [173346, '7 Wonders Duel'], [224037, 'Codenames: Duet'], [50, 'Lost Cities'], [54043, 'Jaipur'],
-  [2655, 'Hive'], [160477, 'Onitama'], [147020, 'Star Realms'], [373106, 'Sky Team'],
-  [12333, 'Twilight Struggle'],
+  [173346, '7 Wonders Duel'], [54043, 'Jaipur'], [163412, 'Patchwork'], [2655, 'Hive'], [373106, 'Sky Team'],
+  // Co-op
+  [30549, 'Pandemic'], [284083, 'The Crew: The Quest for Planet Nine'], [162886, 'Spirit Island'],
+  [291457, 'Gloomhaven: Jaws of the Lion'],
   // Medium weight
-  [68448, '7 Wonders'], [266192, 'Wingspan'], [199792, 'Everdell'], [36218, 'Dominion'],
-  [201808, 'Clank!'], [110327, 'Lords of Waterdeep'], [34635, 'Stone Age'], [40692, 'Small World'],
-  [148949, 'Istanbul'], [157354, 'Five Tribes'], [170042, 'Raiders of the North Sea'],
-  [263918, 'Cartographers'], [233867, 'Welcome To'], [244521, 'The Quacks of Quedlinburg'],
-  [366013, 'Heat: Pedal to the Metal'], [312484, 'Lost Ruins of Arnak'], [262712, 'Res Arcana'],
-  [300531, 'Paleo'], [98778, 'Hanabi'], [284083, 'The Crew: The Quest for Planet Nine'],
+  [266192, 'Wingspan'], [199792, 'Everdell'], [68448, '7 Wonders'], [312484, 'Lost Ruins of Arnak'],
+  [244521, 'The Quacks of Quedlinburg'], [366013, 'Heat: Pedal to the Metal'], [263918, 'Cartographers'],
   // Heavier
-  [167791, 'Terraforming Mars'], [224517, 'Brass: Birmingham'], [169786, 'Scythe'],
-  [31260, 'Agricola'], [3076, 'Puerto Rico'], [2651, 'Power Grid'], [162886, 'Spirit Island'],
-  [237182, 'Root'], [124361, 'Concordia'], [193738, 'Great Western Trail'],
-  [183394, 'Viticulture Essential Edition'], [342942, 'Ark Nova'], [316554, 'Dune: Imperium'],
-  [164928, 'Orléans'], [84876, 'The Castles of Burgundy'], [126163, "Tzolk'in: The Mayan Calendar"],
-  [120677, 'Terra Mystica'], [220308, 'Gaia Project'], [247763, 'Underwater Cities'],
-  [43015, 'Hansa Teutonica'], [93, 'El Grande'], [42, 'Tigris & Euphrates'], [12, 'Ra'],
-  // Thematic / co-op
-  [170216, 'Blood Rage'], [127023, 'Kemet'], [155821, 'Inis'], [39463, 'Cosmic Encounter'],
-  [161936, 'Pandemic Legacy: Season 1'], [291457, 'Gloomhaven: Jaws of the Lion'],
-  [285774, 'Marvel Champions: The Card Game'], [205637, 'Arkham Horror: The Card Game'],
-  [205059, 'Mansions of Madness: Second Edition'],
+  [167791, 'Terraforming Mars'], [224517, 'Brass: Birmingham'], [342942, 'Ark Nova'],
+  [316554, 'Dune: Imperium'], [169786, 'Scythe'], [237182, 'Root'], [84876, 'The Castles of Burgundy'],
+  // Thematic
+  [170216, 'Blood Rage'],
 ];
 
+// Kept short so a game the visitor adds is easy to spot. Several are games the AI
+// recommender likes to suggest, so the "Already on your Wanted list" label shows up.
 const WANTED = [
-  [174430, 'Gloomhaven'], [295770, 'Frosthaven'], [233078, 'Twilight Imperium: Fourth Edition'],
-  [96848, 'Mage Knight Board Game'], [167355, 'Nemesis'], [246900, 'Eclipse: Second Dawn for the Galaxy'],
-  [251247, 'Barrage'], [175914, 'Food Chain Magnate'], [216132, 'Clans of Caledonia'],
-  [184267, 'On Mars'], [284378, 'Kanban EV'], [291572, 'Oath: Chronicles of Empire and Exile'],
-  [256960, 'Pax Pamir: Second Edition'], [397598, 'Dune: Imperium – Uprising'], [350184, 'Earth'],
-  [317985, 'Beyond the Sun'], [341169, 'Great Western Trail: Second Edition'],
-  [321608, 'Hegemony: Lead Your Class to Victory'], [337627, 'Voidfall'],
-  [324856, 'The Crew: Mission Deep Sea'],
+  [256960, 'Pax Pamir: Second Edition'], [397598, 'Dune: Imperium – Uprising'], [251247, 'Barrage'],
+  [350184, 'Earth'], [295770, 'Frosthaven'],
 ];
 
 const PLAY_NOTES = [
@@ -366,7 +344,7 @@ async function main() {
   }
 
   const seed = {
-    schema_version: 1,
+    schema_version: 2, // bump when the content changes: browsers holding an older version re-seed
     source: 'BoardGameGeek XML API2 (game data); plays are generated sample data',
     random_seed: RANDOM_SEED,
     plays_end_date: PLAYS_END_DATE,
