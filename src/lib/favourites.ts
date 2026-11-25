@@ -75,7 +75,8 @@ export function buildRecommendationRequest(
   games: BoardGame[],
   favourites: RankedFavourite[],
   players: PlayerCountChoice,
-  mode: RecommendationMode
+  mode: RecommendationMode,
+  wish: string
 ): RecommendationRequest {
   const owned = games.filter((game) => game.status === 'owned');
   const wanted = games.filter((game) => game.status === 'wishlist');
@@ -85,9 +86,11 @@ export function buildRecommendationRequest(
       .filter((id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0)
       .slice(0, REQUEST_LIMITS.bggIds);
 
+  const trimmedWish = wish.trim();
   return {
     players,
     mode,
+    wish: trimmedWish === '' ? null : trimmedWish.slice(0, REQUEST_LIMITS.wishLength),
     favourites: favourites.slice(0, FAVOURITES_TO_SEND).map(
       (favourite): FavouriteGame => ({
         title: favourite.game.title,
