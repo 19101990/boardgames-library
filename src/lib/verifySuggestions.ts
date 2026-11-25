@@ -3,7 +3,7 @@
 // comes from BGG; the AI only contributes the idea and the "why".
 
 import { fetchBggGameDetails, searchBggIds, type BggGameDetails } from '@/lib/bgg';
-import type { PlayerCountChoice, RecommendationRequest } from '@/lib/recommendationRequest';
+import type { PlayerCount, PlayerCountChoice, RecommendationRequest } from '@/lib/recommendationRequest';
 
 export interface AiSuggestion {
   title: string;
@@ -41,8 +41,12 @@ const MAX_WANTED_IN_RESULTS = 2;
 const MAX_CANDIDATES_PER_TITLE = 3;
 /** Games with fewer BGG ratings are treated as a wrong match (a same-named obscure item). */
 const MIN_USERS_RATED = 30;
-/** "Plays very well with N" = at least 70% of voters call N Best or Recommended... */
-const MIN_POSITIVE_SHARE = 0.7;
+/**
+ * "Plays very well with N" = at least 60% of voters call N Best or Recommended...
+ * (70% dropped well-liked solo games such as Agricola 67%, Everdell 64%, Scythe 61%,
+ * while clearly weak counts sit far lower, e.g. Root solo 11%, Stone Age solo 4%.)
+ */
+const MIN_POSITIVE_SHARE = 0.6;
 /** ...but only when enough people voted; otherwise supporting the count is enough. */
 const MIN_PLAYER_COUNT_VOTES = 10;
 
@@ -78,8 +82,7 @@ async function findCandidateIds(title: string): Promise<number[]> {
     .map((match) => match.id);
 }
 
-function playsWellWith(game: BggGameDetails, players: PlayerCountChoice): boolean {
-  if (players === 'any') return true;
+function playsWellWithCount(game: BggGameDetails, players: PlayerCount): boolean {
   // players = 6 means "6 or more", so the game must support at least 6.
   if (game.minPlayers !== null && game.minPlayers > players) return false;
   if (game.maxPlayers !== null && game.maxPlayers < players) return false;
@@ -89,6 +92,11 @@ function playsWellWith(game: BggGameDetails, players: PlayerCountChoice): boolea
   const total = votes.best + votes.recommended + votes.notRecommended;
   if (total < MIN_PLAYER_COUNT_VOTES) return true;
   return (votes.best + votes.recommended) / total >= MIN_POSITIVE_SHARE;
+}
+
+/** Must play well at every chosen count (none chosen = any game passes). */
+function playsWellWith(game: BggGameDetails, players: PlayerCountChoice): boolean {
+  return players.every((count) => playsWellWithCount(game, count));
 }
 
 export async function verifySuggestions(

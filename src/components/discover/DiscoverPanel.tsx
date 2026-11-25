@@ -4,7 +4,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { buildRecommendationRequest, FAVOURITES_SHOWN, rankFavourites } from '@/lib/favourites';
 import { loadAllPlays, type LibraryMode } from '@/lib/libraryData';
-import type { PlayerCountChoice, RecommendationMode } from '@/lib/recommendationRequest';
+import {
+  REQUEST_LIMITS,
+  describePlayerCounts,
+  type PlayerCount,
+  type PlayerCountChoice,
+  type RecommendationMode,
+} from '@/lib/recommendationRequest';
 // Type-only import: none of the server code ends up in the browser bundle.
 import type { VerifiedSuggestion } from '@/lib/verifySuggestions';
 import type { BoardGame, PlaySession } from '@/types/types';
@@ -18,8 +24,7 @@ interface DiscoverPanelProps {
   onAddToWanted: (bggId: number) => Promise<boolean>;
 }
 
-const PLAYER_OPTIONS: { value: PlayerCountChoice; label: string }[] = [
-  { value: 'any', label: 'Any' },
+const PLAYER_OPTIONS: { value: PlayerCount; label: string }[] = [
   { value: 1, label: '1' },
   { value: 2, label: '2' },
   { value: 3, label: '3' },
@@ -33,12 +38,12 @@ const MODE_OPTIONS: { value: RecommendationMode; label: string }[] = [
   { value: 'different', label: 'Something different' },
 ];
 
-// Shown while waiting; the request usually takes 10–20 seconds.
+// Shown while waiting; the request usually takes 15–30 seconds (12 ideas, then the BGG check).
 const LOADING_STEPS: { fromSecond: number; text: string }[] = [
   { fromSecond: 0, text: 'Reading your favourite games…' },
   { fromSecond: 2, text: 'Asking the AI for ideas…' },
-  { fromSecond: 9, text: 'Checking the ideas on BoardGameGeek…' },
-  { fromSecond: 20, text: 'Almost there…' },
+  { fromSecond: 14, text: 'Checking the ideas on BoardGameGeek…' },
+  { fromSecond: 25, text: 'Almost there…' },
 ];
 
 const chipClass = (isActive: boolean) =>
@@ -51,8 +56,10 @@ const chipClass = (isActive: boolean) =>
 type AddState = 'adding' | 'added' | 'failed';
 
 export function DiscoverPanel({ games, libraryMode, isOnline, onAddToWanted }: DiscoverPanelProps) {
-  const [players, setPlayers] = useState<PlayerCountChoice>('any');
+  // Several counts can be chosen; the game must play well at all of them. Empty = any.
+  const [players, setPlayers] = useState<PlayerCountChoice>([]);
   const [mode, setMode] = useState<RecommendationMode>('similar');
+  const [wish, setWish] = useState('');
 
   const [plays, setPlays] = useState<PlaySession[] | null>(null);
   const [playsError, setPlaysError] = useState<string | null>(null);
@@ -112,7 +119,7 @@ export function DiscoverPanel({ games, libraryMode, isOnline, onAddToWanted }: D
       const response = await fetch('/api/recommendations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildRecommendationRequest(games, favourites, players, mode)),
+        body: JSON.stringify(buildRecommendationRequest(games, favourites, players, mode, wish)),
       });
       const body: { suggestions?: VerifiedSuggestion[]; error?: string } = await response.json();
       if (!response.ok) throw new Error(body.error ?? 'Could not get suggestions. Try again.');
@@ -129,6 +136,13 @@ export function DiscoverPanel({ games, libraryMode, isOnline, onAddToWanted }: D
       if (isMounted.current) setIsRequesting(false);
     }
   };
+
+  const togglePlayerCount = (count: PlayerCount) =>
+    setPlayers((current) =>
+      current.includes(count)
+        ? current.filter((value) => value !== count)
+        : [...current, count].sort((a, b) => a - b)
+    );
 
   const handleAdd = async (bggId: number) => {
     setAddStates((states) => ({ ...states, [bggId]: 'adding' }));
@@ -166,21 +180,37 @@ export function DiscoverPanel({ games, libraryMode, isOnline, onAddToWanted }: D
         </p>
 
         <div>
-          <p className="text-xs font-semibold mb-2 text-[var(--text-muted)]">Plays very well with</p>
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Player count">
+          <p className="text-xs font-semibold mb-2 text-[var(--text-muted)]">
+            Plays very well with <span className="font-normal">(pick one or more)</span>
+          </p>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Player counts">
+            <button
+              type="button"
+              aria-pressed={players.length === 0}
+              disabled={isRequesting}
+              onClick={() => setPlayers([])}
+              className={`${chipClass(players.length === 0)} min-w-[42px]`}
+            >
+              Any
+            </button>
             {PLAYER_OPTIONS.map((option) => (
               <button
                 key={option.label}
                 type="button"
-                aria-pressed={players === option.value}
+                aria-pressed={players.includes(option.value)}
                 disabled={isRequesting}
-                onClick={() => setPlayers(option.value)}
-                className={`${chipClass(players === option.value)} min-w-[42px]`}
+                onClick={() => togglePlayerCount(option.value)}
+                className={`${chipClass(players.includes(option.value))} min-w-[42px]`}
               >
                 {option.label}
               </button>
             ))}
           </div>
+          {players.length > 1 && (
+            <p className="mt-2 text-[11px] text-[var(--text-muted)]">
+              Every suggestion must play well at {describePlayerCounts(players)} players.
+            </p>
+          )}
         </div>
 
         <div>
@@ -199,6 +229,26 @@ export function DiscoverPanel({ games, libraryMode, isOnline, onAddToWanted }: D
               </button>
             ))}
           </div>
+        </div>
+
+        <div>
+          <label htmlFor="discover-wish" className="block text-xs font-semibold mb-2 text-[var(--text-muted)]">
+            Anything else? <span className="font-normal">(optional)</span>
+          </label>
+          <textarea
+            id="discover-wish"
+            value={wish}
+            onChange={(event) => setWish(event.target.value)}
+            maxLength={REQUEST_LIMITS.wishLength}
+            rows={2}
+            disabled={isRequesting}
+            placeholder="e.g. under an hour, a space theme, easy to teach to new players"
+            style={{ borderColor: 'var(--border-surface-elevated)' }}
+            className="w-full resize-none rounded-xl border bg-[var(--bg-surface-elevated)] px-3 py-2 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-dim)] focus:outline-none focus:ring-2 focus:ring-[#0e8396] dark:focus:ring-[#38e1ff] disabled:opacity-60"
+          />
+          <p className="mt-1 text-right text-[11px] text-[var(--text-dim)]">
+            {wish.length}/{REQUEST_LIMITS.wishLength}
+          </p>
         </div>
 
         {/* Which favourites will be sent */}
@@ -252,7 +302,7 @@ export function DiscoverPanel({ games, libraryMode, isOnline, onAddToWanted }: D
           <div className="py-16 flex flex-col items-center justify-center gap-3 text-[var(--text-muted)]">
             <div className="w-7 h-7 border-2 border-current border-t-transparent rounded-full animate-spin text-[#0e8396] dark:text-[#38e1ff]" />
             <p className="text-xs font-semibold tracking-wide">{loadingText}</p>
-            <p className="text-[11px]">This usually takes 10–20 seconds.</p>
+            <p className="text-[11px]">This usually takes 15–30 seconds.</p>
           </div>
         ) : requestError ? (
           <div className="py-12 text-center space-y-2">

@@ -17,8 +17,8 @@ export const maxDuration = 60;
 
 const MODEL = '@cf/openai/gpt-oss-120b';
 // Hard cap on answer length (and cost) per request. Includes the model's thinking,
-// so it must leave room for that plus 8 suggestions.
-const MAX_OUTPUT_TOKENS = 1500;
+// so it must leave room for that plus up to 12 suggestions (8 measured ~530 tokens).
+const MAX_OUTPUT_TOKENS = 2000;
 // With default effort the model can spend the whole token budget thinking and never
 // answer (measured: 26s, no answer). Low effort measured ~12s and ~55 Neurons per request.
 const REASONING_EFFORT = 'low';
@@ -51,6 +51,20 @@ function getCloudflareConfig(): { accountId: string; token: string } | null {
   return accountId && token ? { accountId, token } : null;
 }
 
+/**
+ * The reason is the only AI text shown to visitors, so it is cut to one card-sized
+ * sentence. This also makes the route useless as a free general chatbot: a long
+ * answer smuggled into a "reason" never reaches the visitor in full.
+ */
+const MAX_REASON_LENGTH = 220;
+
+function shortenReason(reason: string): string {
+  // The card shows plain text, so markdown emphasis like *Inis* would show its asterisks.
+  const cleaned = reason.replace(/[*_`#]+/g, '').replace(/\s+/g, ' ').trim();
+  if (cleaned.length <= MAX_REASON_LENGTH) return cleaned;
+  return `${cleaned.slice(0, MAX_REASON_LENGTH - 1).trimEnd()}…`;
+}
+
 // Never trust the AI's output: check every field before using it.
 function parseSuggestions(content: unknown): AiSuggestion[] | null {
   let data: unknown = content;
@@ -66,15 +80,19 @@ function parseSuggestions(content: unknown): AiSuggestion[] | null {
   const list = (data as { suggestions?: unknown }).suggestions;
   if (!Array.isArray(list)) return null;
 
-  return list.filter(
-    (item): item is AiSuggestion =>
-      typeof item === 'object' &&
-      item !== null &&
-      typeof item.title === 'string' &&
-      item.title.trim().length > 0 &&
-      Number.isInteger(item.year) &&
-      typeof item.reason === 'string'
-  );
+  return list
+    .filter(
+      (item): item is AiSuggestion =>
+        typeof item === 'object' &&
+        item !== null &&
+        typeof item.title === 'string' &&
+        item.title.trim().length > 0 &&
+        item.title.length <= 150 &&
+        Number.isInteger(item.year) &&
+        typeof item.reason === 'string' &&
+        item.reason.trim().length > 0
+    )
+    .map((item) => ({ title: item.title.trim(), year: item.year, reason: shortenReason(item.reason) }));
 }
 
 export async function POST(request: NextRequest) {

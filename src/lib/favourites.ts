@@ -21,9 +21,10 @@ export interface RankedFavourite {
   playsAtPlayerCount: number;
 }
 
+/** True when the play was at one of the chosen counts (6 means 6 or more). */
 function matchesPlayerCount(playerCount: number, players: PlayerCountChoice): boolean {
-  if (players === 'any') return true;
-  return players === 6 ? playerCount >= 6 : playerCount === players;
+  if (players.length === 0) return true;
+  return players.some((count) => (count === 6 ? playerCount >= 6 : playerCount === count));
 }
 
 /**
@@ -74,7 +75,8 @@ export function buildRecommendationRequest(
   games: BoardGame[],
   favourites: RankedFavourite[],
   players: PlayerCountChoice,
-  mode: RecommendationMode
+  mode: RecommendationMode,
+  wish: string
 ): RecommendationRequest {
   const owned = games.filter((game) => game.status === 'owned');
   const wanted = games.filter((game) => game.status === 'wishlist');
@@ -84,15 +86,17 @@ export function buildRecommendationRequest(
       .filter((id): id is number => typeof id === 'number' && Number.isInteger(id) && id > 0)
       .slice(0, REQUEST_LIMITS.bggIds);
 
+  const trimmedWish = wish.trim();
   return {
     players,
     mode,
+    wish: trimmedWish === '' ? null : trimmedWish.slice(0, REQUEST_LIMITS.wishLength),
     favourites: favourites.slice(0, FAVOURITES_TO_SEND).map(
       (favourite): FavouriteGame => ({
         title: favourite.game.title,
         rating: Math.round(favourite.averageRating * 10) / 10,
         plays: favourite.plays,
-        playsAtPlayerCount: players === 'any' ? undefined : favourite.playsAtPlayerCount,
+        playsAtPlayerCount: players.length === 0 ? undefined : favourite.playsAtPlayerCount,
         categories: tags(favourite.game.categories),
         mechanics: tags(favourite.game.mechanics),
       })
