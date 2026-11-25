@@ -4,7 +4,9 @@
 // Anyone can call the route directly (skipping our UI), so every field is treated
 // as untrusted: allowed values only, limited counts, limited lengths.
 
-export type PlayerCountChoice = 'any' | 1 | 2 | 3 | 4 | 5 | 6; // 6 means "6 or more"
+export type PlayerCount = 1 | 2 | 3 | 4 | 5 | 6; // 6 means "6 or more"
+/** Every chosen count must play well. Empty = any player count. Sorted, no duplicates. */
+export type PlayerCountChoice = PlayerCount[];
 export type RecommendationMode = 'similar' | 'different';
 
 export interface FavouriteGame {
@@ -12,7 +14,7 @@ export interface FavouriteGame {
   /** Average "overall" play rating, 1–5. */
   rating: number;
   plays: number;
-  /** How many of those plays were at the chosen player count (only when players != 'any'). */
+  /** How many of those plays were at one of the chosen player counts (only when counts are chosen). */
   playsAtPlayerCount?: number;
   categories: string[];
   mechanics: string[];
@@ -80,7 +82,7 @@ function validateFavourite(value: unknown, players: PlayerCountChoice): Favourit
   if (!isWholeNumber(game.plays, 1, REQUEST_LIMITS.plays)) return 'Each favourite needs a valid play count.';
 
   let playsAtPlayerCount: number | undefined;
-  if (players !== 'any' && game.playsAtPlayerCount !== undefined) {
+  if (players.length > 0 && game.playsAtPlayerCount !== undefined) {
     if (!isWholeNumber(game.playsAtPlayerCount, 0, game.plays)) return 'Invalid plays at the chosen player count.';
     playsAtPlayerCount = game.playsAtPlayerCount;
   }
@@ -104,9 +106,15 @@ export function validateRecommendationRequest(body: unknown): ValidationResult {
   const input = body as Record<string, unknown>;
 
   const players = input.players;
-  if (players !== 'any' && !isWholeNumber(players, 1, 6)) {
-    return { ok: false, error: 'players must be "any" or a number from 1 to 6.' };
+  if (
+    !Array.isArray(players) ||
+    players.length > 6 ||
+    !players.every((count) => isWholeNumber(count, 1, 6)) ||
+    new Set(players).size !== players.length
+  ) {
+    return { ok: false, error: 'players must be a list of different numbers from 1 to 6 (empty = any).' };
   }
+  const sortedPlayers = [...players].sort((a, b) => a - b) as PlayerCountChoice;
 
   if (input.mode !== 'similar' && input.mode !== 'different') {
     return { ok: false, error: 'mode must be "similar" or "different".' };
@@ -120,7 +128,7 @@ export function validateRecommendationRequest(body: unknown): ValidationResult {
   }
   const favourites: FavouriteGame[] = [];
   for (const item of input.favourites) {
-    const result = validateFavourite(item, players as PlayerCountChoice);
+    const result = validateFavourite(item, sortedPlayers);
     if (typeof result === 'string') return { ok: false, error: result };
     favourites.push(result);
   }
@@ -139,7 +147,7 @@ export function validateRecommendationRequest(body: unknown): ValidationResult {
   return {
     ok: true,
     value: {
-      players: players as PlayerCountChoice,
+      players: sortedPlayers,
       mode: input.mode,
       favourites,
       ownedTitles,
@@ -151,6 +159,12 @@ export function validateRecommendationRequest(body: unknown): ValidationResult {
 
 // ---------- Prompt ----------
 
+/** [1, 3] -> "1 and 3", [2, 4, 6] -> "2, 4 and 6+". */
+export function describePlayerCounts(players: PlayerCountChoice): string {
+  const labels = players.map((count) => (count === 6 ? '6+' : String(count)));
+  return labels.length <= 1 ? labels.join('') : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+}
+
 const SYSTEM_PROMPT = [
   'You are a board game expert who recommends real, published board games.',
   'Only suggest games that exist on BoardGameGeek, using their BoardGameGeek title.',
@@ -160,8 +174,8 @@ const SYSTEM_PROMPT = [
 function describeFavourite(game: FavouriteGame, players: PlayerCountChoice): string {
   // JSON.stringify puts titles in quotes, making it clear where each piece of data starts and ends.
   let line = `- ${JSON.stringify(game.title)}: rated ${game.rating}/5 over ${game.plays} play${game.plays === 1 ? '' : 's'}`;
-  if (players !== 'any' && game.playsAtPlayerCount !== undefined) {
-    line += ` (${game.playsAtPlayerCount} at ${players === 6 ? '6+' : players} players)`;
+  if (players.length > 0 && game.playsAtPlayerCount !== undefined) {
+    line += ` (${game.playsAtPlayerCount} at ${describePlayerCounts(players)} players)`;
   }
   if (game.categories.length > 0) line += `. Categories: ${game.categories.join(', ')}`;
   if (game.mechanics.length > 0) line += `. Mechanics: ${game.mechanics.join(', ')}`;
@@ -177,11 +191,9 @@ export function buildPrompt(request: RecommendationRequest): { system: string; u
       : `Suggest ${SUGGESTIONS_TO_REQUEST} games that are different from their favourites (other mechanics or themes) but that they would still likely enjoy, judging by what they rate highly.`;
 
   const playerRule =
-    players === 'any'
+    players.length === 0
       ? ''
-      : players === 6
-        ? 'Every suggested game must play very well with 6 or more players.'
-        : `Every suggested game must play very well with exactly ${players} players, not just support that count.`;
+      : `Every suggested game must play very well with ${players.length > 1 ? 'each of these player counts' : 'this player count'}: ${describePlayerCounts(players)} players${players.includes(6) ? ' (6+ means 6 or more)' : ''}. Supporting the count is not enough; it must be good at it.`;
 
   const lines = [
     'The visitor\'s favourite board games, best first:',

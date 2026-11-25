@@ -3,7 +3,7 @@
 // comes from BGG; the AI only contributes the idea and the "why".
 
 import { fetchBggGameDetails, searchBggIds, type BggGameDetails } from '@/lib/bgg';
-import type { PlayerCountChoice, RecommendationRequest } from '@/lib/recommendationRequest';
+import type { PlayerCount, PlayerCountChoice, RecommendationRequest } from '@/lib/recommendationRequest';
 
 export interface AiSuggestion {
   title: string;
@@ -78,8 +78,7 @@ async function findCandidateIds(title: string): Promise<number[]> {
     .map((match) => match.id);
 }
 
-function playsWellWith(game: BggGameDetails, players: PlayerCountChoice): boolean {
-  if (players === 'any') return true;
+function playsWellWithCount(game: BggGameDetails, players: PlayerCount): boolean {
   // players = 6 means "6 or more", so the game must support at least 6.
   if (game.minPlayers !== null && game.minPlayers > players) return false;
   if (game.maxPlayers !== null && game.maxPlayers < players) return false;
@@ -89,6 +88,11 @@ function playsWellWith(game: BggGameDetails, players: PlayerCountChoice): boolea
   const total = votes.best + votes.recommended + votes.notRecommended;
   if (total < MIN_PLAYER_COUNT_VOTES) return true;
   return (votes.best + votes.recommended) / total >= MIN_POSITIVE_SHARE;
+}
+
+/** Must play well at every chosen count (none chosen = any game passes). */
+function playsWellWith(game: BggGameDetails, players: PlayerCountChoice): boolean {
+  return players.every((count) => playsWellWithCount(game, count));
 }
 
 export async function verifySuggestions(

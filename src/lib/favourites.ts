@@ -21,9 +21,10 @@ export interface RankedFavourite {
   playsAtPlayerCount: number;
 }
 
+/** True when the play was at one of the chosen counts (6 means 6 or more). */
 function matchesPlayerCount(playerCount: number, players: PlayerCountChoice): boolean {
-  if (players === 'any') return true;
-  return players === 6 ? playerCount >= 6 : playerCount === players;
+  if (players.length === 0) return true;
+  return players.some((count) => (count === 6 ? playerCount >= 6 : playerCount === count));
 }
 
 /**
@@ -92,7 +93,7 @@ export function buildRecommendationRequest(
         title: favourite.game.title,
         rating: Math.round(favourite.averageRating * 10) / 10,
         plays: favourite.plays,
-        playsAtPlayerCount: players === 'any' ? undefined : favourite.playsAtPlayerCount,
+        playsAtPlayerCount: players.length === 0 ? undefined : favourite.playsAtPlayerCount,
         categories: tags(favourite.game.categories),
         mechanics: tags(favourite.game.mechanics),
       })

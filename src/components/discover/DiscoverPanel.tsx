@@ -4,7 +4,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { buildRecommendationRequest, FAVOURITES_SHOWN, rankFavourites } from '@/lib/favourites';
 import { loadAllPlays, type LibraryMode } from '@/lib/libraryData';
-import type { PlayerCountChoice, RecommendationMode } from '@/lib/recommendationRequest';
+import {
+  describePlayerCounts,
+  type PlayerCount,
+  type PlayerCountChoice,
+  type RecommendationMode,
+} from '@/lib/recommendationRequest';
 // Type-only import: none of the server code ends up in the browser bundle.
 import type { VerifiedSuggestion } from '@/lib/verifySuggestions';
 import type { BoardGame, PlaySession } from '@/types/types';
@@ -18,8 +23,7 @@ interface DiscoverPanelProps {
   onAddToWanted: (bggId: number) => Promise<boolean>;
 }
 
-const PLAYER_OPTIONS: { value: PlayerCountChoice; label: string }[] = [
-  { value: 'any', label: 'Any' },
+const PLAYER_OPTIONS: { value: PlayerCount; label: string }[] = [
   { value: 1, label: '1' },
   { value: 2, label: '2' },
   { value: 3, label: '3' },
@@ -51,7 +55,8 @@ const chipClass = (isActive: boolean) =>
 type AddState = 'adding' | 'added' | 'failed';
 
 export function DiscoverPanel({ games, libraryMode, isOnline, onAddToWanted }: DiscoverPanelProps) {
-  const [players, setPlayers] = useState<PlayerCountChoice>('any');
+  // Several counts can be chosen; the game must play well at all of them. Empty = any.
+  const [players, setPlayers] = useState<PlayerCountChoice>([]);
   const [mode, setMode] = useState<RecommendationMode>('similar');
 
   const [plays, setPlays] = useState<PlaySession[] | null>(null);
@@ -130,6 +135,13 @@ export function DiscoverPanel({ games, libraryMode, isOnline, onAddToWanted }: D
     }
   };
 
+  const togglePlayerCount = (count: PlayerCount) =>
+    setPlayers((current) =>
+      current.includes(count)
+        ? current.filter((value) => value !== count)
+        : [...current, count].sort((a, b) => a - b)
+    );
+
   const handleAdd = async (bggId: number) => {
     setAddStates((states) => ({ ...states, [bggId]: 'adding' }));
     let saved = false;
@@ -166,21 +178,37 @@ export function DiscoverPanel({ games, libraryMode, isOnline, onAddToWanted }: D
         </p>
 
         <div>
-          <p className="text-xs font-semibold mb-2 text-[var(--text-muted)]">Plays very well with</p>
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Player count">
+          <p className="text-xs font-semibold mb-2 text-[var(--text-muted)]">
+            Plays very well with <span className="font-normal">(pick one or more)</span>
+          </p>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Player counts">
+            <button
+              type="button"
+              aria-pressed={players.length === 0}
+              disabled={isRequesting}
+              onClick={() => setPlayers([])}
+              className={`${chipClass(players.length === 0)} min-w-[42px]`}
+            >
+              Any
+            </button>
             {PLAYER_OPTIONS.map((option) => (
               <button
                 key={option.label}
                 type="button"
-                aria-pressed={players === option.value}
+                aria-pressed={players.includes(option.value)}
                 disabled={isRequesting}
-                onClick={() => setPlayers(option.value)}
-                className={`${chipClass(players === option.value)} min-w-[42px]`}
+                onClick={() => togglePlayerCount(option.value)}
+                className={`${chipClass(players.includes(option.value))} min-w-[42px]`}
               >
                 {option.label}
               </button>
             ))}
           </div>
+          {players.length > 1 && (
+            <p className="mt-2 text-[11px] text-[var(--text-muted)]">
+              Every suggestion must play well at {describePlayerCounts(players)} players.
+            </p>
+          )}
         </div>
 
         <div>
