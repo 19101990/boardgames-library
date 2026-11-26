@@ -1,6 +1,6 @@
 # Board Game Library
 
-My board game shelf as an app: the games I own, the ones I want, every game night I've logged, and an AI that suggests what to add next based on what I enjoyed most.
+Board game shelf as an app: the games I own, the ones I want, every game night I've logged, and an AI that suggests what to add next based on what I enjoyed most.
 
 **[Try it: boardgames-library-ten.vercel.app](https://boardgames-library-ten.vercel.app/)**
 
