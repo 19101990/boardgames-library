@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -89,6 +89,21 @@ export default function GameDetailPage() {
   const [playerCount, setPlayerCount] = useState(2);
   const [playNotes, setPlayNotes] = useState('');
   const [playRatings, setPlayRatings] = useState<PlayRatings>({});
+
+  // On phones the form opens below the visible screen, so the button seemed to do nothing.
+  // Each open bumps this counter; the effect below then scrolls the form into view.
+  const playFormRef = useRef<HTMLDivElement>(null);
+  const [playFormScrollRequest, setPlayFormScrollRequest] = useState(0);
+
+  useEffect(() => {
+    const form = playFormRef.current;
+    if (playFormScrollRequest === 0 || !form) return;
+    // Only scroll when the form's top isn't comfortably on screen (desktop usually already shows it).
+    const { top } = form.getBoundingClientRect();
+    if (top >= 0 && top <= window.innerHeight * 0.6) return;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    form.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+  }, [playFormScrollRequest]);
 
   // Load the game with its expansions and plays: real data (signed in) or demo data (signed out).
   const fetchGameDetails = useCallback(async () => {
@@ -179,6 +194,7 @@ export default function GameDetailPage() {
     setPlayNotes('');
     setPlayRatings({});
     setIsLoggingPlay(true);
+    setPlayFormScrollRequest((count) => count + 1);
   };
 
   const handleEditPlay = (play: PlaySession) => {
@@ -188,6 +204,7 @@ export default function GameDetailPage() {
     setPlayNotes(play.notes ?? '');
     setPlayRatings(sanitizePlayRatings(play.ratings) ?? {});
     setIsLoggingPlay(true);
+    setPlayFormScrollRequest((count) => count + 1);
   };
 
   // Toggle expansion ownership
@@ -652,8 +669,9 @@ export default function GameDetailPage() {
             {/* In-Card Play Logging Form */}
             {isLoggingPlay && canViewPlays && (
               <div
+                ref={playFormRef}
                 style={{ backgroundColor: 'var(--bg-surface)', borderColor: 'var(--border-surface)' }}
-                className="p-4 rounded-2xl border space-y-3.5 shadow-md animate-in fade-in duration-150"
+                className="scroll-mt-4 p-4 rounded-2xl border space-y-3.5 shadow-md animate-in fade-in duration-150"
               >
                 <div>
                   <label className="text-[11px] font-semibold text-[#536482] dark:text-[#8ba2c4] mb-1 block">
