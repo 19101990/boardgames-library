@@ -206,7 +206,7 @@ export function GameCard({ game, viewMode, onCardClick }: GameCardProps) {
         type="button"
         onClick={() => onCardClick(game)}
         style={cardStyle}
-        className="flex w-full flex-col p-0 rounded-2xl border overflow-hidden active:scale-[0.98] transition-all shadow-md shadow-black/5 dark:shadow-black/40 text-left focus:outline-none"
+        className="game-card-shadow flex w-full flex-col p-0 rounded-2xl border overflow-hidden active:scale-[0.98] transition-all text-left focus:outline-none"
       >
         {cardContent}
       </button>
@@ -224,7 +224,7 @@ export function GameCard({ game, viewMode, onCardClick }: GameCardProps) {
         }
       }}
       style={cardStyle}
-      className="rounded-2xl border overflow-hidden active:scale-[0.98] transition-all shadow-md shadow-black/5 dark:shadow-black/40"
+      className="game-card-shadow rounded-2xl border overflow-hidden active:scale-[0.98] transition-all"
     >
       {cardContent}
     </Link>
